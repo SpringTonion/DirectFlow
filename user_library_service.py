@@ -78,25 +78,23 @@ def add_to_playlist(playlist_id: int, asset_id: int) -> dict:
 
 
 # ================================================================
-# 3. TRUY XUẤT + SẮP XẾP DANH SÁCH THEO METADATA (SORTING ENGINE)
+# 3. TRUY XUẤT + SẮP XẾP DANH SÁCH THEO METADATA (ĐÃ SỬA LỖI THUMBNAIL)
 # ================================================================
 
 def get_user_saved_media(user_id: int, sort_by: str = "date_saved", order: str = "DESC") -> list:
-    """
-    Lấy toàn bộ danh sách các video một người dùng đã tải/lưu, hỗ trợ sắp xếp theo Metadata từ URL.
-    """
-    # Khớp cấu trúc từ điển bảo mật chống SQL Injection
+    """Lấy danh sách các video đã lưu, hỗ trợ lấy kèm thumbnail_url để hiển thị lên UI."""
+    clean_user_id = int(user_id)
     allowed_sort_fields = {
         "date_saved": "ud.downloaded_at",
         "views": "ma.view_count",
         "duration": "ma.duration_seconds",
-        "date_published": "ma.published_at",
         "title": "ma.title"
     }
     
     sort_column = allowed_sort_fields.get(sort_by, "ud.downloaded_at")
     direction = "DESC" if order.upper() == "DESC" else "ASC"
 
+    # ĐÃ SỬA: Thêm GROUP BY và MAX(mc.thumbnail_url) để lấy ảnh bìa từ kho cache ra ngoài
     sql = f"""
         SELECT 
             ud.id AS download_id,
@@ -110,18 +108,21 @@ def get_user_saved_media(user_id: int, sort_by: str = "date_saved", order: str =
             ma.view_count,
             ma.duration_seconds,
             ma.published_at,
-            c.channel_name AS author_name
+            c.channel_name AS author_name,
+            MAX(mc.thumbnail_url) AS thumbnail_url
         FROM user_downloads ud
         JOIN media_assets ma ON ud.asset_id = ma.id
         LEFT JOIN creators c ON ma.creator_id = c.id
+        LEFT JOIN media_cache mc ON ma.id = mc.asset_id
         WHERE ud.user_id = ?
+        GROUP BY ud.id, ma.id
         ORDER BY {sort_column} {direction}
     """
     
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(sql, (user_id,))
+            cursor.execute(sql, (clean_user_id,))
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         print(f"❌ Lỗi Sorting Engine: {e}")

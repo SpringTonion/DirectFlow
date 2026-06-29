@@ -11,6 +11,7 @@ from database_setup import get_connection
 
 def create_playlist(user_id: int, name: str, is_public: bool = False) -> dict:
     """Tạo thư mục playlist mới cho người dùng."""
+    clean_user_id = int(user_id) # SỬA LỖI
     name = name.strip()
     if not name:
         return {'success': False, 'message': 'Tên playlist không được để trống.'}
@@ -22,7 +23,7 @@ def create_playlist(user_id: int, name: str, is_public: bool = False) -> dict:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO playlists (user_id, name, is_public) VALUES (?, ?, ?)",
-                (user_id, name, int(is_public))
+                (clean_user_id, name, int(is_public))
             )
             conn.commit()
             return {'success': True, 'message': 'Tạo playlist thành công.', 'playlist_id': cursor.lastrowid}
@@ -31,7 +32,8 @@ def create_playlist(user_id: int, name: str, is_public: bool = False) -> dict:
 
 def delete_playlist(playlist_id: int, user_id: int) -> dict:
     """Xóa hoàn toàn playlist (Tự động xóa các mục bên trong nhờ CASCADE)."""
-    if not _is_owner(playlist_id, user_id):
+    clean_user_id = int(user_id) # SỬA LỖI
+    if not _is_owner(playlist_id, clean_user_id):
         return {'success': False, 'message': 'Bạn không có quyền quản lý playlist này.'}
 
     with get_connection() as conn:
@@ -41,7 +43,8 @@ def delete_playlist(playlist_id: int, user_id: int) -> dict:
 
 def add_to_playlist(playlist_id: int, asset_id: int, user_id: int) -> dict:
     """Đẩy liên kết video vào một playlist cụ thể."""
-    if not _is_owner(playlist_id, user_id):
+    clean_user_id = int(user_id) # SỬA LỖI
+    if not _is_owner(playlist_id, clean_user_id):
         return {'success': False, 'message': 'Bạn không có quyền chỉnh sửa playlist này.'}
 
     try:
@@ -60,6 +63,7 @@ def add_to_playlist(playlist_id: int, asset_id: int, user_id: int) -> dict:
 
 def get_user_playlists(user_id: int) -> list:
     """Lấy toàn bộ danh sách danh mục playlist cá nhân để render lên UI."""
+    clean_user_id = int(user_id) # SỬA LỖI
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
@@ -67,12 +71,34 @@ def get_user_playlists(user_id: int) -> list:
             FROM playlists p
             WHERE p.user_id = ?
             ORDER BY p.created_at DESC
-        ''', (user_id,))
+        ''', (clean_user_id,))
         return [dict(r) for r in cursor.fetchall()]
 
 def _is_owner(playlist_id: int, user_id: int) -> bool:
     """Kiểm tra quyền sở hữu bảo mật."""
+    clean_user_id = int(user_id) # SỬA LỖI
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM playlists WHERE id = ? AND user_id = ?", (playlist_id, user_id))
+        cursor.execute("SELECT id FROM playlists WHERE id = ? AND user_id = ?", (playlist_id, clean_user_id))
         return cursor.fetchone() is not None
+
+def get_playlist_contents(playlist_id: int, user_id: int) -> dict:
+    """Lấy danh sách chi tiết các video nằm bên trong một Playlist cụ thể."""
+    if not _is_owner(playlist_id, user_id):
+        return {'success': False, 'message': 'Bạn không có quyền xem nội dung thư mục phát này.'}
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 
+                ma.id AS asset_id, ma.title, ma.platform, ma.source_url,
+                ma.duration_seconds, ma.view_count, mc.thumbnail_url
+            FROM playlist_items pi
+            JOIN media_assets ma ON pi.asset_id = ma.id
+            LEFT JOIN media_cache mc ON ma.id = mc.asset_id
+            WHERE pi.playlist_id = ?
+            GROUP BY ma.id
+        ''', (playlist_id,))
+        rows = [dict(r) for r in cursor.fetchall()]
+        
+    return {'success': True, 'items': rows}
