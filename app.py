@@ -1,8 +1,6 @@
 import os
 from flask import send_file
 import tempfile
-import subprocess
-import uuid
 import logging
 from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
@@ -23,6 +21,7 @@ import user_library_service
 from youtube_service import resolve_youtube_url 
 from database_setup import get_connection, create_master_database
 from cache_service import get_cache
+from merge_service import merge_video_audio # <-- ĐÃ IMPORT SERVICE MỚI
 
 load_dotenv()
 create_master_database()
@@ -35,7 +34,6 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'directflow_fallback_
 app.config['JWT_TOKEN_LOCATION'] = ['headers', 'query_string']
 app.config['JWT_QUERY_STRING_NAME'] = 'token'
 
-# CẤU HÌNH CORS CHUẨN
 CORS(app, resources={r"/*": {
     "origins": ["http://127.0.0.1:5500", "http://localhost:5500"],
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -91,7 +89,7 @@ def get_me():
     return jsonify(user)
 
 # =====================================================================
-# 2. MEDIA RESOLVE (ĐÃ SỬA LỖI CHẾT CACHE)
+# 2. MEDIA RESOLVE
 # =====================================================================
 @app.route('/media/resolve', methods=['POST'])
 @jwt_required()
@@ -100,7 +98,6 @@ def resolve_media():
     url = data.get('url')
     if not url: return jsonify({'error': 'URL trống'}), 400
     try:
-        # LUÔN LUÔN CÀO LẠI STREAM YOUTUBE ĐỂ BẢO ĐẢM LINK KHÔNG BỊ HẾT HẠN
         info = resolve_youtube_url(url)
         existing_asset = media_service.get_media_by_url(url)
         
@@ -112,22 +109,12 @@ def resolve_media():
             if not asset_result['success']: return jsonify({'error': asset_result['message']}), 400
             asset_id = asset_result['asset_id']
 
-        # Ghi đè cập nhật Cache link stream mới nhất
         if 'formats' in info:
             saved = set()
-
             for fmt in info["formats"]:
-
-                if fmt["quality"] in saved:
-                    continue
-
+                if fmt["quality"] in saved: continue
                 saved.add(fmt["quality"])
-
-                cache_service.save_cache(
-                    asset_id,
-                    fmt["quality"],
-                    fmt["url"],
-                    info.get("thumbnail", ""),6)
+                cache_service.save_cache(asset_id, fmt["quality"], fmt["url"], info.get("thumbnail", ""), 6)
         
         formats = cache_service.get_all_cache_for_asset(asset_id)
         return jsonify({
@@ -135,18 +122,16 @@ def resolve_media():
             'duration': info.get('duration',0), 'thumbnail': info.get('thumbnail',''), 'platform': 'youtube',
             'formats': [{'quality': f['quality'], 'format': 'mp4'} for f in formats]
         })
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         logger.exception(e)
-        return jsonify({
-            "error": str(e)
-        }),500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/media/<int:asset_id>/formats', methods=['GET'])
 def get_media_formats(asset_id):
     return jsonify([{'quality': f['quality'], 'format': 'mp4'} for f in cache_service.get_all_cache_for_asset(asset_id)])
 
 # =====================================================================
-# 3. DOWNLOADS & SORTING
+# 3. DOWNLOADS & STORAGE (BỔ SUNG API XÓA KHO LƯU TRỮ)
 # =====================================================================
 @app.route('/users/me/downloads_sorted', methods=['GET'])
 @jwt_required()
@@ -161,109 +146,42 @@ def create_download():
     if not result['success'] and result.get('download_id') is None: return jsonify({'error': result['message']}), 400
     return jsonify(result)
 
+# API XÓA KHỎI KHO LƯU TRỮ
+@app.route('/downloads/<int:asset_id>', methods=['DELETE'])
+@jwt_required()
+def delete_from_library(asset_id):
+    user_id = get_jwt_identity()
+    with get_connection() as conn:
+        conn.execute("DELETE FROM user_downloads WHERE user_id = ? AND asset_id = ?", (int(user_id), asset_id))
+        conn.commit()
+    return jsonify({"success": True})
+
 @app.route('/downloads/<int:download_id>/file', methods=['GET'])
 @jwt_required()
 def get_download_file(download_id):
-
     download = download_service.get_download_by_id(download_id)
-
-    if not download:
-        return jsonify({'error': 'Download không tồn tại'}), 404
-
-    if download['user_id'] != int(get_jwt_identity()):
-        return jsonify({'error': 'Unauthorized'}), 403
+    if not download: return jsonify({'error': 'Download không tồn tại'}), 404
+    if download['user_id'] != int(get_jwt_identity()): return jsonify({'error': 'Unauthorized'}), 403
 
     quality = download['format_selected']
 
-    # ==========================
-    # Audio riêng
-    # ==========================
-    if quality == "audio":
-        audio_cache = cache_service.get_cache(
-            download['asset_id'],
-            "audio"
-        )
+    if quality in ("audio", "thumbnail"):
+        cache = cache_service.get_cache(download['asset_id'], quality)
+        if not cache: return jsonify({'error': f'{quality} đã hết hạn'}), 404
+        return redirect(cache['download_url'])
 
-        if not audio_cache:
-            return jsonify({'error': 'Audio hết hạn'}), 404
+    # GỘP VIDEO + AUDIO BẰNG MERGE_SERVICE MỚI
+    video_cache = cache_service.get_cache(download['asset_id'], quality)
+    audio_cache = cache_service.get_cache(download['asset_id'], "audio")
 
-        return redirect(audio_cache['download_url'])
-
-    # ==========================
-    # Thumbnail riêng
-    # ==========================
-    if quality == "thumbnail":
-        thumb_cache = cache_service.get_cache(
-            download['asset_id'],
-            "thumbnail"
-        )
-
-        if not thumb_cache:
-            return jsonify({'error': 'Thumbnail hết hạn'}), 404
-
-        return redirect(thumb_cache['download_url'])
-
-    # ==========================
-    # Video + Audio
-    # ==========================
-
-    video_cache = cache_service.get_cache(
-        download['asset_id'],
-        quality
-    )
-
-    audio_cache = cache_service.get_cache(
-        download['asset_id'],
-        "audio"
-    )
-
-    if not video_cache:
-        return jsonify({'error': 'Video hết hạn'}), 404
-
-    if not audio_cache:
-        return jsonify({'error': 'Audio hết hạn'}), 404
-
-    temp_name = str(uuid.uuid4()) + ".mp4"
-    output_path = os.path.join(tempfile.gettempdir(), temp_name)
+    if not video_cache or not audio_cache:
+        return jsonify({'error': 'Luồng Video hoặc Audio đã hết hạn, vui lòng cào lại link'}), 404
 
     try:
-
-        subprocess.run([
-            "ffmpeg",
-            "-y",
-
-            "-i", video_cache["download_url"],
-            "-i", audio_cache["download_url"],
-
-            "-c:v", "copy",
-            "-c:a", "aac",
-
-            "-movflags",
-            "+faststart",
-
-            output_path
-
-        ], check=True)
-
-        return send_file(
-            output_path,
-            as_attachment=True,
-            download_name="video.mp4",
-            mimetype="video/mp4"
-        )
-
-    except subprocess.CalledProcessError:
-
-        return jsonify({
-            "error": "Không thể ghép Audio và Video"
-        }), 500
-
-    finally:
-        try:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-        except:
-            pass
+        output_path = merge_video_audio(video_cache["download_url"], audio_cache["download_url"])
+        return send_file(output_path, as_attachment=True, download_name=f"DirectFlow_{quality}.mp4", mimetype="video/mp4")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/users/me/downloads', methods=['GET'])
 @jwt_required()
@@ -271,7 +189,7 @@ def get_my_downloads():
     return jsonify(download_service.get_user_download_history(int(get_jwt_identity())))
 
 # =====================================================================
-# 4. PLAYLISTS (ĐÃ SỬA LỖI 500 DATABASE COLUMN)
+# 4. PLAYLISTS
 # =====================================================================
 @app.route('/playlists/ensure_favorite', methods=['POST'])
 @jwt_required()
@@ -305,7 +223,6 @@ def add_to_playlist(playlist_id):
     
     with get_connection() as conn:
         cursor = conn.cursor()
-        # ĐÃ SỬA: Lấy asset_id thay vì cột 'id' không tồn tại
         cursor.execute("SELECT asset_id FROM playlist_items WHERE playlist_id = ? AND asset_id = ?", (playlist_id, int(asset_id)))
         if cursor.fetchone():
             conn.execute("DELETE FROM playlist_items WHERE playlist_id = ? AND asset_id = ?", (playlist_id, int(asset_id)))
@@ -326,28 +243,6 @@ def get_playlist_items(playlist_id):
 
 @app.route('/health', methods=['GET'])
 def health(): return jsonify({'status': 'ok'})
-
-# =====================================================================
-# 5. ADMIN DASHBOARD
-# =====================================================================
-@app.route('/admin/users', methods=['GET'])
-@jwt_required()
-@admin_required
-def admin_get_users():
-    return jsonify(auth_service.get_all_users(request.args.get('page', 1, type=int), 20))
-
-@app.route('/admin/users/<int:target_user_id>', methods=['PUT'])
-@jwt_required()
-@admin_required
-def admin_modify_user(target_user_id):
-    return jsonify(auth_service.set_user_active(target_user_id, bool(int(request.json.get('is_active', 1)))))
-
-@app.route('/admin/users/<int:target_user_id>', methods=['DELETE'])
-@jwt_required()
-@admin_required
-def admin_delete_user(target_user_id):
-    if target_user_id == int(get_jwt_identity()): return jsonify({'error': 'Cannot delete self'}), 400
-    return jsonify(user_library_service.delete_user_admin(target_user_id))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8000)))

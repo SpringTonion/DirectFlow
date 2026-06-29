@@ -2,43 +2,38 @@ import os
 import uuid
 import tempfile
 import subprocess
-import requests
+import logging
 
-TEMP_DIR = "temp"
+logger = logging.getLogger(__name__)
 
-os.makedirs(TEMP_DIR, exist_ok=True)
+# ĐÃ SỬA: Sử dụng thư mục Temp của Hệ điều hành (Windows Temp)
+# Tránh lưu vào thư mục code làm Live Server tự động F5/reload trang!
+TEMP_DIR = tempfile.gettempdir()
 
-
-def download_file(url, filename):
-    r = requests.get(url, stream=True)
-
-    with open(filename, "wb") as f:
-        for chunk in r.iter_content(1024 * 1024):
-            if chunk:
-                f.write(chunk)
-
-
-def merge_video_audio(video_url, audio_url):
+def merge_video_audio(video_url: str, audio_url: str) -> str:
+    """Sử dụng FFmpeg ghép trực tiếp luồng stream HTTPS, không cần tải tạm về ổ cứng."""
     uid = str(uuid.uuid4())
+    output_path = os.path.join(TEMP_DIR, uid + ".mp4")
 
-    video_file = os.path.join(TEMP_DIR, uid + "_video.mp4")
-    audio_file = os.path.join(TEMP_DIR, uid + "_audio.m4a")
-    output_file = os.path.join(TEMP_DIR, uid + ".mp4")
-
-    download_file(video_url, video_file)
-    download_file(audio_url, audio_file)
-
-    subprocess.run([
-        "ffmpeg",
-        "-y",
-        "-i", video_file,
-        "-i", audio_file,
-        "-c:v", "copy",
-        "-c:a", "copy",
-        output_file
-    ])
-
-    os.remove(video_file)
-    os.remove(audio_file)
-
-    return output_file
+    try:
+        subprocess.run([
+            "./ffmpeg.exe",
+            "-y",
+            "-i", video_url,     # Link stream Video
+            "-i", audio_url,     # Link stream Audio
+            "-c:v", "copy",      # Giữ nguyên chất lượng hình
+            "-c:a", "aac",       # Chuẩn hóa âm thanh sang AAC
+            "-movflags", "+faststart",
+            output_path
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        return output_path
+        
+    except FileNotFoundError:
+        # Bắt chính xác lỗi [WinError 2]
+        raise RuntimeError("LỖI HỆ THỐNG: Máy tính chưa cài đặt FFmpeg. Vui lòng cài FFmpeg để ghép file!")
+    except subprocess.CalledProcessError as e:
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        raise RuntimeError("Không thể ghép luồng Video và Audio. Link có thể đã bị YouTube chặn/hết hạn.")
+    
