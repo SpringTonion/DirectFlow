@@ -52,6 +52,19 @@ def admin_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
+
+def log_system_event(user_id, action_type, asset_id=None, details=None, ip_address=None):
+    """Ghi 1 sự kiện vào bảng system_logs. Không bao giờ raise lỗi ra ngoài (log fail không được làm hỏng request chính)."""
+    try:
+        with get_connection() as conn:
+            conn.execute('''
+                INSERT INTO system_logs (user_id, asset_id, action_type, ip_address, details)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, asset_id, action_type, ip_address or request.remote_addr, details))
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Không ghi được system_log ({action_type}): {e}")
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(cache_service.cleanup_expired_cache, 'interval', hours=1, id='cache_cleanup')
 scheduler.start()
@@ -68,6 +81,7 @@ def login():
         identity=str(result['user']['id']),
         additional_claims={'role': result['user']['role'], 'username': result['user']['username']}
     )
+    log_system_event(result['user']['id'], 'LOGIN', details=f"Đăng nhập: {result['user']['username']}")
     return jsonify(result)
 
 @app.route('/auth/register', methods=['POST'])
@@ -75,6 +89,7 @@ def register():
     data = request.json or {}
     result = auth_service.register_user(data.get('username'), data.get('password'), data.get('email'))
     if not result['success']: return jsonify({'error': result['message']}), 400
+    log_system_event(result.get('user_id'), 'REGISTER', details=f"Tài khoản mới: {data.get('username')}")
     return jsonify(result)
 
 @app.route('/auth/logout', methods=['POST'])
@@ -101,8 +116,10 @@ def update_my_password():
 @app.route('/users/me', methods=['DELETE'])
 @jwt_required()
 def delete_my_account():
+    user_id = int(get_jwt_identity())
+    log_system_event(None, 'ACCOUNT_DELETE_SELF', details=f"User #{user_id} tự xóa tài khoản")
     with get_connection() as conn:
-        conn.execute("DELETE FROM users WHERE id = ?", (int(get_jwt_identity()),))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
     return jsonify({'success': True})
 
@@ -118,14 +135,17 @@ def resolve_media():
     try:
         info = resolve_youtube_url(url)
         existing_asset = media_service.get_media_by_url(url)
-        
+        actor_user_id = int(get_jwt_identity()) if get_jwt_identity() else None
+
         if existing_asset:
             asset_id = existing_asset['id']
+            log_system_event(actor_user_id, 'RESOLVE_URL', asset_id=asset_id, details=f"Trích xuất (đã có sẵn): {url}")
         else:
             creator_id = media_service.get_or_create_creator(info.get('channel_id') or info.get('external_id', 'unknown'), info.get('creator', 'N/A'))
             asset_result = media_service.add_media_asset(info['title'], 'youtube', info.get('external_id', ''), url, creator_id, info['duration'], info.get('view_count', 0))
             if not asset_result['success']: return jsonify({'error': asset_result['message']}), 400
             asset_id = asset_result['asset_id']
+            log_system_event(actor_user_id, 'RESOLVE_URL_NEW_ASSET', asset_id=asset_id, details=f"Trích xuất (asset mới): {url}")
 
         if 'formats' in info:
             saved = set()
@@ -173,6 +193,10 @@ def create_download():
 
     try:
         result = user_library_service.record_download(user_id, asset_id, quality)
+        log_system_event(
+            user_id, 'DOWNLOAD', asset_id=int(asset_id),
+            details=f"Chất lượng: {quality}" + (" (đã có sẵn trong kho, cập nhật)" if result.get('duplicated') else " (mới)")
+        )
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': f"Lỗi lưu kho: {str(e)}"}), 500
@@ -356,10 +380,13 @@ def admin_dashboard():
         assets_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM user_downloads")
         dl_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM user_downloads WHERE date(downloaded_at) = date('now','localtime')")
+        dl_today = cursor.fetchone()[0]
     return jsonify({
         'total_users': users_count,
         'total_assets': assets_count,
-        'total_downloads': dl_count
+        'total_downloads': dl_count,
+        'downloads_today': dl_today
     })
 
 @app.route('/admin/users', methods=['GET'])
@@ -367,16 +394,114 @@ def admin_dashboard():
 def admin_get_users():
     return jsonify(auth_service.get_all_users_admin(request.args.get('page', 1, type=int), 50))
 
+@app.route('/admin/downloads', methods=['GET'])
+@admin_required
+def admin_get_all_downloads():
+    """Thống kê lượt tải toàn hệ thống, kèm timestamp + tên user + tên video, hỗ trợ phân trang."""
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+                ud.id, ud.user_id, u.username, ud.asset_id, ma.title AS asset_title,
+                ud.format_selected, ud.download_status, ud.downloaded_at
+            FROM user_downloads ud
+            LEFT JOIN users u ON ud.user_id = u.id
+            LEFT JOIN media_assets ma ON ud.asset_id = ma.id
+            ORDER BY ud.downloaded_at DESC
+            LIMIT ? OFFSET ?
+        ''', (per_page, offset))
+        rows = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("SELECT COUNT(*) FROM user_downloads")
+        total = cursor.fetchone()[0]
+    return jsonify({'items': rows, 'page': page, 'per_page': per_page, 'total': total})
+
+@app.route('/admin/users/<int:target_user_id>/activity', methods=['GET'])
+@admin_required
+def admin_get_user_activity(target_user_id):
+    """Xem chi tiết 1 user: tổng lượt tải, danh sách video đã tải, danh sách hoạt động gần đây từ system_logs."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, role, is_active, last_login_at, created_at FROM users WHERE id = ?", (target_user_id,))
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'Không tìm thấy người dùng'}), 404
+
+        cursor.execute('''
+            SELECT ud.id, ud.asset_id, ma.title AS asset_title, ud.format_selected, ud.download_status, ud.downloaded_at
+            FROM user_downloads ud
+            LEFT JOIN media_assets ma ON ud.asset_id = ma.id
+            WHERE ud.user_id = ?
+            ORDER BY ud.downloaded_at DESC
+        ''', (target_user_id,))
+        downloads = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute('''
+            SELECT sl.id, sl.action_type, sl.asset_id, ma.title AS asset_title, sl.ip_address, sl.details, sl.processed_at
+            FROM system_logs sl
+            LEFT JOIN media_assets ma ON sl.asset_id = ma.id
+            WHERE sl.user_id = ?
+            ORDER BY sl.processed_at DESC
+            LIMIT 100
+        ''', (target_user_id,))
+        logs = [dict(r) for r in cursor.fetchall()]
+
+    return jsonify({
+        'user': dict(user),
+        'total_downloads': len(downloads),
+        'downloads': downloads,
+        'recent_logs': logs
+    })
+
+@app.route('/admin/logs', methods=['GET'])
+@admin_required
+def admin_get_system_logs():
+    """Xem nhật ký hệ thống (system_logs), mới nhất trước, hỗ trợ lọc theo action_type + phân trang."""
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+    action_type = request.args.get('action_type')
+
+    where_clause = "WHERE sl.action_type = ?" if action_type else ""
+    params = [action_type] if action_type else []
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f'''
+            SELECT sl.id, sl.user_id, u.username, sl.asset_id, ma.title AS asset_title,
+                   sl.action_type, sl.ip_address, sl.details, sl.processed_at
+            FROM system_logs sl
+            LEFT JOIN users u ON sl.user_id = u.id
+            LEFT JOIN media_assets ma ON sl.asset_id = ma.id
+            {where_clause}
+            ORDER BY sl.processed_at DESC
+            LIMIT ? OFFSET ?
+        ''', (*params, per_page, offset))
+        rows = [dict(r) for r in cursor.fetchall()]
+        cursor.execute(f"SELECT COUNT(*) FROM system_logs sl {where_clause}", params)
+        total = cursor.fetchone()[0]
+    return jsonify({'items': rows, 'page': page, 'per_page': per_page, 'total': total})
+
 @app.route('/admin/users/<int:target_user_id>', methods=['PUT'])
 @admin_required
 def admin_modify_user(target_user_id):
     data = request.json or {}
-    return jsonify(auth_service.modify_user_admin(target_user_id, int(data.get('is_active', 1)), data.get('role', 'member')))
+    admin_id = int(get_jwt_identity())
+    new_active, new_role = int(data.get('is_active', 1)), data.get('role', 'member')
+    result = auth_service.modify_user_admin(target_user_id, new_active, new_role)
+    log_system_event(
+        admin_id, 'ADMIN_MODIFY_USER', details=f"Admin #{admin_id} sửa user #{target_user_id} -> is_active={new_active}, role={new_role}"
+    )
+    return jsonify(result)
 
 @app.route('/admin/users/<int:target_user_id>', methods=['DELETE'])
 @admin_required
 def admin_delete_user(target_user_id):
     if target_user_id == int(get_jwt_identity()): return jsonify({'error': 'Cannot delete self'}), 400
+    admin_id = int(get_jwt_identity())
+    log_system_event(admin_id, 'ADMIN_DELETE_USER', details=f"Admin #{admin_id} xóa user #{target_user_id}")
     return jsonify(auth_service.delete_user_admin(target_user_id))
 
 if __name__ == '__main__':

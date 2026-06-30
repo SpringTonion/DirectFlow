@@ -97,6 +97,18 @@
         .pass-wrap input { padding-right: 40px !important; }
         .pass-toggle-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-tertiary); font-size: 15px; padding: 4px; display: flex; align-items: center; }
         .pass-toggle-btn:hover { color: var(--accent); }
+        input[type="password"]::-ms-reveal,
+        input[type="password"]::-ms-clear { display: none; }
+        .log-table th, .log-table td { font-size: 12px; }
+        .status-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+        .status-pill.SUCCESS { background:#dcfce7; color:#166534; }
+        .status-pill.PENDING { background:#fef3c7; color:#92400e; }
+        .status-pill.FAILED { background:#fee2e2; color:#991b1b; }
+        .admin-tabs { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+        .admin-tab-btn { padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; border:1.5px solid var(--border-color); background:#fff; cursor:pointer; }
+        .admin-tab-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .admin-pane { display:none; }
+        .admin-pane.active { display:block; }
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
@@ -115,18 +127,74 @@
     </header>
 
     <div id="adminDashboard">
-        <div class="section-title"> KHU VỰC QUẢN TRỊ HỆ THỐNG</div>
+        <div class="section-title"><i class="fas fa-shield-halved" style="color:var(--red);"></i> KHU VỰC QUẢN TRỊ HỆ THỐNG</div>
         <div class="stat-grid">
             <div class="stat-box"><div class="stat-label">Tổng người dùng</div><div class="stat-num" id="adUsers">0</div></div>
             <div class="stat-box"><div class="stat-label">Video lưu kho</div><div class="stat-num" id="adAssets">0</div></div>
-            <div class="stat-box"><div class="stat-label">Tiến trình tải</div><div class="stat-num" id="adDls">0</div></div>
+            <div class="stat-box"><div class="stat-label">Tổng lượt tải</div><div class="stat-num" id="adDls">0</div></div>
+            <div class="stat-box"><div class="stat-label">Lượt tải hôm nay</div><div class="stat-num" id="adDlsToday">0</div></div>
         </div>
-        <div class="card">
-            <div class="section-title" style="margin-bottom:16px;"><i class="fas fa-users-gear"></i> Quản Lý Tài Khoản Thành Viên</div>
-            <table class="log-table">
-                <thead><tr><th>ID</th><th>Tài khoản</th><th>Chức vụ</th><th>Trạng thái</th><th>Ngày tạo</th><th>Hành động Quản trị</th></tr></thead>
-                <tbody id="adminUserTableBody"><tr><td colspan="6" style="text-align:center;">Đang tải dữ liệu...</td></tr></tbody>
-            </table>
+
+        <div class="admin-tabs">
+            <button class="admin-tab-btn active" data-pane="paneUsers" onclick="switchAdminTab('paneUsers', this)"><i class="fas fa-users-gear"></i> Quản Lý Tài Khoản</button>
+            <button class="admin-tab-btn" data-pane="paneDownloads" onclick="switchAdminTab('paneDownloads', this)"><i class="fas fa-download"></i> Lượt Tải Toàn Hệ Thống</button>
+            <button class="admin-tab-btn" data-pane="paneLogs" onclick="switchAdminTab('paneLogs', this)"><i class="fas fa-clipboard-list"></i> Nhật Ký Hệ Thống</button>
+        </div>
+
+        <div id="paneUsers" class="admin-pane active">
+            <div class="card">
+                <div class="section-title" style="margin-bottom:16px;"><i class="fas fa-users-gear"></i> Quản Lý Tài Khoản Thành Viên</div>
+                <table class="log-table">
+                    <thead><tr><th>ID</th><th>Tài khoản</th><th>Chức vụ</th><th>Trạng thái</th><th>Ngày tạo</th><th>Hành động Quản trị</th></tr></thead>
+                    <tbody id="adminUserTableBody"><tr><td colspan="6" style="text-align:center;">Đang tải dữ liệu...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="paneDownloads" class="admin-pane">
+            <div class="card">
+                <div class="section-title" style="margin-bottom:16px;"><i class="fas fa-download"></i> Lịch Sử Tải Toàn Hệ Thống</div>
+                <table class="log-table">
+                    <thead><tr><th>ID</th><th>User</th><th>Video</th><th>Chất lượng</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
+                    <tbody id="adminDownloadsTableBody"><tr><td colspan="6" style="text-align:center;">Đang tải dữ liệu...</td></tr></tbody>
+                </table>
+                <div style="display:flex; justify-content:center; gap:10px; margin-top:14px;">
+                    <button class="btn" onclick="changeAdminDlPage(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <span id="adminDlPageLabel" style="font-size:12px; align-self:center;">Trang 1</span>
+                    <button class="btn" onclick="changeAdminDlPage(1)"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <div id="paneLogs" class="admin-pane">
+            <div class="card">
+                <div class="section-title" style="margin-bottom:16px;"><i class="fas fa-clipboard-list"></i> Nhật Ký Hệ Thống (System Logs)</div>
+                <table class="log-table">
+                    <thead><tr><th>ID</th><th>User</th><th>Hành động</th><th>Video liên quan</th><th>IP</th><th>Chi tiết</th><th>Thời gian</th></tr></thead>
+                    <tbody id="adminLogsTableBody"><tr><td colspan="7" style="text-align:center;">Đang tải dữ liệu...</td></tr></tbody>
+                </table>
+                <div style="display:flex; justify-content:center; gap:10px; margin-top:14px;">
+                    <button class="btn" onclick="changeAdminLogPage(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <span id="adminLogPageLabel" style="font-size:12px; align-self:center;">Trang 1</span>
+                    <button class="btn" onclick="changeAdminLogPage(1)"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalUserActivity">
+        <div class="modal" style="max-width:560px;">
+            <h2><i class="fas fa-user-clock" style="color:var(--accent);"></i> Hoạt động: <span id="uaUsername"></span></h2>
+            <div style="background:var(--bg-primary); padding:12px; border-radius:var(--radius-sm); margin-bottom:14px; font-size:13px;">
+                <div><b>Email:</b> <span id="uaEmail"></span></div>
+                <div style="margin-top:4px;"><b>Tổng lượt tải:</b> <span id="uaTotalDl"></span></div>
+                <div style="margin-top:4px;"><b>Đăng nhập gần nhất:</b> <span id="uaLastLogin"></span></div>
+            </div>
+            <h3 style="font-size:13px; margin-bottom:8px; color:var(--text-secondary);">Video đã tải</h3>
+            <div id="uaDownloadsList" style="max-height:180px; overflow-y:auto; margin-bottom:14px; font-size:12px;"></div>
+            <h3 style="font-size:13px; margin-bottom:8px; color:var(--text-secondary);">Hoạt động gần đây</h3>
+            <div id="uaLogsList" style="max-height:180px; overflow-y:auto; font-size:12px;"></div>
+            <button class="btn" style="width:100%; justify-content:center; margin-top:14px;" onclick="closeAllModals()">Đóng</button>
         </div>
     </div>
 
@@ -830,6 +898,8 @@
     }
 
     // HÀM ADMIN
+    let adminDlPage = 1, adminLogPage = 1;
+
     async function loadAdminDashboard() {
         try {
             const r = await fetch(`${CONFIG_API}/admin/dashboard`, { headers: makeHeaders() });
@@ -838,9 +908,19 @@
                 document.getElementById('adUsers').innerText = data.total_users;
                 document.getElementById('adAssets').innerText = data.total_assets;
                 document.getElementById('adDls').innerText = data.total_downloads;
+                document.getElementById('adDlsToday').innerText = data.downloads_today;
             }
             loadAdminUsersTable();
         } catch(e) {}
+    }
+
+    function switchAdminTab(paneId, btn) {
+        document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(paneId).classList.add('active');
+        btn.classList.add('active');
+        if(paneId === 'paneDownloads') loadAdminDownloadsTable();
+        if(paneId === 'paneLogs') loadAdminLogsTable();
     }
     
     async function loadAdminUsersTable() {
@@ -856,14 +936,14 @@
                 const roleBadge = u.role === 'admin' ? '<span class="badge admin">Quản trị viên</span>' : '<span class="badge member">Thành viên</span>';
                 const statusBadge = u.is_active ? '<span class="badge member">Hoạt động</span>' : '<span class="badge locked">Bị Khóa</span>';
                 
-                let actionHtml = '';
+                let actionHtml = `<button class="admin-action-btn" style="color:var(--accent); border-color:var(--accent-light);" onclick="viewUserActivity(${u.id}, '${u.username.replace(/'/g, "\\'")}')"><i class="fas fa-chart-simple"></i> Hoạt động</button>`;
                 if(!isMe) {
-                    actionHtml = `
+                    actionHtml += `
                         <button class="admin-action-btn" onclick="updateUser(${u.id}, ${u.is_active ? 0 : 1}, '${u.role}')">${u.is_active ? 'Khóa TK' : 'Mở Khóa'}</button>
                         <button class="admin-action-btn" onclick="updateUser(${u.id}, ${u.is_active}, '${u.role === 'admin' ? 'member' : 'admin'}')">${u.role === 'admin' ? 'Hạ cấp' : 'Nâng cấp'}</button>
                         <button class="admin-action-btn btn-text-red" onclick="deleteUser(${u.id}, '${u.username}')"><i class="fas fa-trash"></i></button>
                     `;
-                } else actionHtml = '<span style="color:var(--text-tertiary); font-size:11px;">(Bạn)</span>';
+                } else actionHtml += '<span style="color:var(--text-tertiary); font-size:11px;">(Bạn)</span>';
 
                 return `<tr><td><b>#${u.id}</b></td><td><div style="font-weight:600;">${u.username}</div><div style="font-size:11px; color:var(--text-tertiary);">${u.email||''}</div></td><td>${roleBadge}</td><td>${statusBadge}</td><td style="font-size:11px;">${new Date(u.created_at).toLocaleDateString('vi-VN')}</td><td>${actionHtml}</td></tr>`;
             }).join('');
@@ -883,6 +963,95 @@
             const r = await fetch(`${CONFIG_API}/admin/users/${targetId}`, { method: 'DELETE', headers: makeHeaders() });
             if(r.ok) { createToast(`Đã xóa ${username}!`, "success"); loadAdminDashboard(); }
         } catch(e) {}
+    }
+
+    function statusPill(status) {
+        return `<span class="status-pill ${status}">${status}</span>`;
+    }
+
+    async function loadAdminDownloadsTable() {
+        const tbody = document.getElementById('adminDownloadsTableBody');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Đang tải dữ liệu...</td></tr>';
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/downloads?page=${adminDlPage}`, { headers: makeHeaders() });
+            const d = await r.json();
+            if(!d.items || d.items.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Trống.</td></tr>'; return; }
+            tbody.innerHTML = d.items.map(it => `
+                <tr>
+                    <td>#${it.id}</td>
+                    <td>${it.username || `User #${it.user_id}`}</td>
+                    <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${it.asset_title || `Asset #${it.asset_id}`}</td>
+                    <td>${it.format_selected}</td>
+                    <td>${statusPill(it.download_status)}</td>
+                    <td style="font-size:11px;">${new Date(it.downloaded_at).toLocaleString('vi-VN')}</td>
+                </tr>`).join('');
+            document.getElementById('adminDlPageLabel').innerText = `Trang ${d.page} / ${Math.max(1, Math.ceil(d.total / d.per_page))}`;
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--red);">Mất kết nối.</td></tr>'; }
+    }
+
+    function changeAdminDlPage(delta) {
+        adminDlPage = Math.max(1, adminDlPage + delta);
+        loadAdminDownloadsTable();
+    }
+
+    async function loadAdminLogsTable() {
+        const tbody = document.getElementById('adminLogsTableBody');
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Đang tải dữ liệu...</td></tr>';
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/logs?page=${adminLogPage}`, { headers: makeHeaders() });
+            const d = await r.json();
+            if(!d.items || d.items.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Trống.</td></tr>'; return; }
+            tbody.innerHTML = d.items.map(it => `
+                <tr>
+                    <td>#${it.id}</td>
+                    <td>${it.username || (it.user_id ? `User #${it.user_id}` : '—')}</td>
+                    <td><b>${it.action_type}</b></td>
+                    <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${it.asset_title || ''}</td>
+                    <td style="font-size:11px;">${it.ip_address || ''}</td>
+                    <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px;">${it.details || ''}</td>
+                    <td style="font-size:11px;">${new Date(it.processed_at).toLocaleString('vi-VN')}</td>
+                </tr>`).join('');
+            document.getElementById('adminLogPageLabel').innerText = `Trang ${d.page} / ${Math.max(1, Math.ceil(d.total / d.per_page))}`;
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red);">Mất kết nối.</td></tr>'; }
+    }
+
+    function changeAdminLogPage(delta) {
+        adminLogPage = Math.max(1, adminLogPage + delta);
+        loadAdminLogsTable();
+    }
+
+    async function viewUserActivity(userId, username) {
+        document.getElementById('uaUsername').innerText = username;
+        document.getElementById('uaEmail').innerText = '...';
+        document.getElementById('uaTotalDl').innerText = '...';
+        document.getElementById('uaLastLogin').innerText = '...';
+        document.getElementById('uaDownloadsList').innerHTML = '<div class="loading"></div>';
+        document.getElementById('uaLogsList').innerHTML = '<div class="loading"></div>';
+        openModal('modalUserActivity');
+
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/users/${userId}/activity`, { headers: makeHeaders() });
+            if(!r.ok) { createToast("Không tải được hoạt động user.", "error"); return; }
+            const d = await r.json();
+
+            document.getElementById('uaEmail').innerText = d.user.email || '—';
+            document.getElementById('uaTotalDl').innerText = d.total_downloads;
+            document.getElementById('uaLastLogin').innerText = d.user.last_login_at ? new Date(d.user.last_login_at).toLocaleString('vi-VN') : 'Chưa từng đăng nhập';
+
+            const dlList = document.getElementById('uaDownloadsList');
+            dlList.innerHTML = d.downloads.length === 0 ? '<div style="color:var(--text-tertiary);">Chưa tải video nào.</div>' :
+                d.downloads.map(dl => `<div style="padding:6px 0; border-bottom:1px solid var(--border-color);">
+                    <b>${dl.asset_title || `Asset #${dl.asset_id}`}</b> — ${dl.format_selected} ${statusPill(dl.download_status)}
+                    <div style="color:var(--text-tertiary); font-size:11px;">${new Date(dl.downloaded_at).toLocaleString('vi-VN')}</div>
+                </div>`).join('');
+
+            const logList = document.getElementById('uaLogsList');
+            logList.innerHTML = d.recent_logs.length === 0 ? '<div style="color:var(--text-tertiary);">Chưa có hoạt động nào.</div>' :
+                d.recent_logs.map(lg => `<div style="padding:6px 0; border-bottom:1px solid var(--border-color);">
+                    <b>${lg.action_type}</b> ${lg.asset_title ? `— ${lg.asset_title}` : ''}
+                    <div style="color:var(--text-tertiary); font-size:11px;">${lg.details || ''} · ${new Date(lg.processed_at).toLocaleString('vi-VN')}</div>
+                </div>`).join('');
+        } catch(e) { createToast("Mất kết nối.", "error"); }
     }
 
    async function verifySession() {
