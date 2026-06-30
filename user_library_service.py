@@ -151,6 +151,12 @@ def delete_playlist(playlist_id: int, user_id: int) -> dict:
 def add_to_playlist(playlist_id: int, asset_id: int, user_id: int) -> dict:
     """Đẩy/Rút video khỏi playlist (toggle), chỉ khi đúng chủ sở hữu."""
     clean_user_id = int(user_id)
+
+    if int(playlist_id) == FAVORITES_VIRTUAL_PLAYLIST_ID:
+        result = toggle_favorite(clean_user_id, asset_id)
+        result["message"] = "Đã thêm vào yêu thích." if result["action"] == "added" else "Đã xóa khỏi yêu thích."
+        return result
+
     if not _is_owner(playlist_id, clean_user_id):
         return {"success": False, "message": "Bạn không có quyền chỉnh sửa playlist này."}
 
@@ -179,8 +185,13 @@ def add_to_playlist(playlist_id: int, asset_id: int, user_id: int) -> dict:
         return {"success": False, "message": str(e)}
 
 
+FAVORITES_VIRTUAL_PLAYLIST_ID = -1  # playlist ảo, không lưu trong bảng `playlists`
+
+
 def get_user_playlists(user_id: int) -> list:
-    """Lấy toàn bộ danh mục playlist cá nhân để render lên UI."""
+    """Lấy toàn bộ danh mục playlist cá nhân để render lên UI.
+    Luôn chèn thêm 1 playlist ảo 'Favorite' ở đầu danh sách, đại diện cho bảng `favorites`.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
@@ -189,11 +200,17 @@ def get_user_playlists(user_id: int) -> list:
             WHERE user_id = ?
             ORDER BY created_at DESC
         ''', (int(user_id),))
-        return [dict(r) for r in cursor.fetchall()]
+        playlists = [dict(r) for r in cursor.fetchall()]
+
+    favorite_entry = {"id": FAVORITES_VIRTUAL_PLAYLIST_ID, "name": "Favorite", "created_at": None}
+    return [favorite_entry] + playlists
 
 
 def get_playlist_contents(playlist_id: int, user_id: int) -> dict:
     """Lấy danh sách chi tiết các video nằm bên trong một playlist cụ thể."""
+    if int(playlist_id) == FAVORITES_VIRTUAL_PLAYLIST_ID:
+        return {"success": True, "items": get_user_favorites(user_id)}
+
     if not _is_owner(playlist_id, user_id):
         return {"success": False, "message": "Bạn không có quyền xem nội dung danh sách phát này."}
 
@@ -213,6 +230,52 @@ def get_playlist_contents(playlist_id: int, user_id: int) -> dict:
         rows = [dict(r) for r in cursor.fetchall()]
 
     return {"success": True, "items": rows}
+
+
+def record_download(user_id: int, asset_id: int, quality: str) -> dict:
+    """Ghi nhận 1 lượt tải vào kho cá nhân, chống dupe theo TỪNG ASSET (không tính quality).
+    Nếu user đã có asset này trong kho (bất kể trước đó chọn chất lượng nào) -> chỉ cập nhật
+    chất lượng + thời gian tải gần nhất của dòng cũ, KHÔNG insert thêm dòng mới.
+    Nếu chưa có -> insert dòng mới.
+    """
+    clean_user_id, clean_asset_id = int(user_id), int(asset_id)
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id FROM user_downloads
+            WHERE user_id = ? AND asset_id = ?
+        ''', (clean_user_id, clean_asset_id))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute('''
+                UPDATE user_downloads
+                SET format_selected = ?, download_status = 'SUCCESS', downloaded_at = datetime('now','localtime')
+                WHERE id = ?
+            ''', (quality, existing["id"]))
+            conn.commit()
+            return {"success": True, "download_id": existing["id"], "status": "SUCCESS", "duplicated": True}
+
+        try:
+            cursor.execute('''
+                INSERT INTO user_downloads (user_id, asset_id, format_selected, download_status)
+                VALUES (?, ?, ?, 'SUCCESS')
+            ''', (clean_user_id, clean_asset_id, quality))
+            conn.commit()
+            return {"success": True, "download_id": cursor.lastrowid, "status": "SUCCESS", "duplicated": False}
+        except sqlite3.IntegrityError:
+            # Phòng race-condition: 2 request cùng lúc cùng asset -> request thua chỉ update lại dòng đã được insert.
+            cursor.execute('''
+                SELECT id FROM user_downloads WHERE user_id = ? AND asset_id = ?
+            ''', (clean_user_id, clean_asset_id))
+            row = cursor.fetchone()
+            cursor.execute('''
+                UPDATE user_downloads
+                SET format_selected = ?, download_status = 'SUCCESS', downloaded_at = datetime('now','localtime')
+                WHERE id = ?
+            ''', (quality, row["id"]))
+            conn.commit()
+            return {"success": True, "download_id": row["id"], "status": "SUCCESS", "duplicated": True}
 
 
 # ================================================================

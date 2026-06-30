@@ -22,6 +22,7 @@ import user_library_service
 from youtube_service import resolve_youtube_url 
 from database_setup import get_connection, create_master_database
 from cache_service import get_cache
+from merge_service import merge_video_audio, extract_audio_mp3
 
 load_dotenv()
 create_master_database()
@@ -171,16 +172,8 @@ def create_download():
         return jsonify({'error': 'Thiếu tham số tải'}), 400
 
     try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            # Ghi trực tiếp vào kho, không qua service để tránh lỗi
-            cursor.execute('''
-                INSERT INTO user_downloads (user_id, asset_id, format_selected, download_status)
-                VALUES (?, ?, ?, 'SUCCESS')
-            ''', (user_id, int(asset_id), quality))
-            download_id = cursor.lastrowid
-            conn.commit()
-        return jsonify({'success': True, 'download_id': download_id, 'status': 'SUCCESS'})
+        result = user_library_service.record_download(user_id, asset_id, quality)
+        return jsonify(result)
     except Exception as e:
         return jsonify({'error': f"Lỗi lưu kho: {str(e)}"}), 500
 
@@ -189,17 +182,25 @@ def guest_download_file():
     asset_id = request.args.get('asset_id', type=int)
     quality = request.args.get('quality')
     if not asset_id or not quality: return jsonify({'error': 'Thiếu tham số'}), 400
-    
-    if quality in ("audio", "thumbnail"):
+
+    if quality == "thumbnail":
         cache = cache_service.get_cache(asset_id, quality)
         return redirect(cache['download_url']) if cache else ("Hết hạn", 404)
-        
+
+    if quality == "audio":
+        cache = cache_service.get_cache(asset_id, quality)
+        if not cache: return "Hết hạn", 404
+        try:
+            mp3_path = extract_audio_mp3(cache['download_url'])
+            return send_file(mp3_path, as_attachment=True, download_name="Guest_audio.mp3", mimetype="audio/mpeg")
+        except Exception as e:
+            return f"Lỗi convert mp3: {str(e)}", 500
+
     vc = cache_service.get_cache(asset_id, quality)
     ac = cache_service.get_cache(asset_id, "audio")
     if not vc or not ac: return "Luồng đã hết hạn, vui lòng cào lại link", 404
     
     try: 
-        from merge_service import merge_video_audio
         return send_file(merge_video_audio(vc["download_url"], ac["download_url"]), as_attachment=True, download_name=f"Guest_{quality}.mp4", mimetype="video/mp4")
     except Exception as e: return f"Lỗi đóng gói: {str(e)}", 500
 
@@ -216,15 +217,20 @@ def get_download_file(download_id):
             return jsonify({'error': 'Unauthorized'}), 403
 
         quality = download['format_selected']
-        if quality in ("audio", "thumbnail"):
+        if quality == "thumbnail":
             cache = cache_service.get_cache(download['asset_id'], quality)
             return redirect(cache['download_url']) if cache else (jsonify({'error': 'Hết hạn'}), 404)
+
+        if quality == "audio":
+            cache = cache_service.get_cache(download['asset_id'], quality)
+            if not cache: return jsonify({'error': 'Hết hạn'}), 404
+            mp3_path = extract_audio_mp3(cache['download_url'])
+            return send_file(mp3_path, as_attachment=True, download_name="DirectFlow_audio.mp3", mimetype="audio/mpeg")
 
         video_cache = cache_service.get_cache(download['asset_id'], quality)
         audio_cache = cache_service.get_cache(download['asset_id'], "audio")
         if not video_cache or not audio_cache: return jsonify({'error': 'Video/Audio hết hạn'}), 404
 
-        from merge_service import merge_video_audio
         output_path = merge_video_audio(video_cache["download_url"], audio_cache["download_url"])
         return send_file(output_path, as_attachment=True, download_name=f"DirectFlow_{quality}.mp4", mimetype="video/mp4")
     except Exception as e: 
@@ -284,7 +290,7 @@ def create_playlist():
     if not result['success']: return jsonify({'error': result['message']}), 400
     return jsonify(result)
 
-@app.route('/playlists/<int:playlist_id>', methods=['DELETE'])
+@app.route('/playlists/<int(signed=True):playlist_id>', methods=['DELETE'])
 @jwt_required()
 def delete_playlist(playlist_id):
     user_id = int(get_jwt_identity())
@@ -292,7 +298,7 @@ def delete_playlist(playlist_id):
     if not result['success']: return jsonify({'error': result['message']}), 403
     return jsonify(result)
 
-@app.route('/playlists/<int:playlist_id>/items', methods=['POST'])
+@app.route('/playlists/<int(signed=True):playlist_id>/items', methods=['POST'])
 @jwt_required()
 def add_to_playlist(playlist_id):
     user_id = int(get_jwt_identity())
@@ -301,7 +307,7 @@ def add_to_playlist(playlist_id):
     if not result['success']: return jsonify({'error': result['message']}), 403
     return jsonify(result)
 
-@app.route('/playlists/<int:playlist_id>/items', methods=['GET'])
+@app.route('/playlists/<int(signed=True):playlist_id>/items', methods=['GET'])
 @jwt_required()
 def get_playlist_items(playlist_id):
     user_id = int(get_jwt_identity())
@@ -309,7 +315,7 @@ def get_playlist_items(playlist_id):
     if not result['success']: return jsonify({'error': result['message']}), 403
     return jsonify(result['items'])
 
-@app.route('/playlists/<int:playlist_id>/items/<int:asset_id>', methods=['DELETE'])
+@app.route('/playlists/<int(signed=True):playlist_id>/items/<int:asset_id>', methods=['DELETE'])
 @jwt_required()
 def remove_playlist_item(playlist_id, asset_id):
     user_id = int(get_jwt_identity())

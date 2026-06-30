@@ -93,6 +93,10 @@
         .field { margin-bottom: 14px; }
         .field label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
         .field input, .field select { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border-color); border-radius: var(--radius-sm); font-size: 14px; outline: none; }
+        .pass-wrap { position: relative; }
+        .pass-wrap input { padding-right: 40px !important; }
+        .pass-toggle-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-tertiary); font-size: 15px; padding: 4px; display: flex; align-items: center; }
+        .pass-toggle-btn:hover { color: var(--accent); }
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
@@ -111,7 +115,7 @@
     </header>
 
     <div id="adminDashboard">
-        <div class="section-title"><i class="fas fa-shield-halved" style="color:var(--red);"></i> KHU VỰC QUẢN TRỊ HỆ THỐNG</div>
+        <div class="section-title"> KHU VỰC QUẢN TRỊ HỆ THỐNG</div>
         <div class="stat-grid">
             <div class="stat-box"><div class="stat-label">Tổng người dùng</div><div class="stat-num" id="adUsers">0</div></div>
             <div class="stat-box"><div class="stat-label">Video lưu kho</div><div class="stat-num" id="adAssets">0</div></div>
@@ -187,7 +191,12 @@
     <div class="modal">
         <h2><i class="fas fa-user-shield" style="color:var(--accent);"></i> Đăng nhập hệ thống</h2>
         <div class="field"><label>Tên đăng nhập / Email</label><input type="text" id="loginIdent" placeholder="Username hoặc Email"></div>
-        <div class="field"><label>Mật khẩu</label><input type="password" id="loginPass" placeholder="••••••••"></div>
+        <div class="field"><label>Mật khẩu</label>
+            <div class="pass-wrap">
+                <input type="password" id="loginPass" placeholder="••••••••">
+                <button type="button" class="pass-toggle-btn" onclick="togglePassVis('loginPass', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
         <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="login()">Đăng Nhập</button>
         <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy bỏ</button>
     </div>
@@ -198,8 +207,18 @@
         <h2><i class="fas fa-user-plus" style="color:var(--accent);"></i> Đăng ký thành viên</h2>
         <div class="field"><label>Tên tài khoản (Username)</label><input type="text" id="regUser" placeholder="Ví dụ: van_a_2026"></div>
         <div class="field"><label>Địa chỉ Email</label><input type="email" id="regEmail" placeholder="Bắt buộc nhập email"></div>
-        <div class="field"><label>Mật khẩu bảo mật</label><input type="password" id="regPass" placeholder="Tối thiểu 6 ký tự"></div>
-        <div class="field"><label>Xác nhận mật khẩu</label><input type="password" id="regPassConfirm" placeholder="Nhập lại mật khẩu"></div>
+        <div class="field"><label>Mật khẩu bảo mật</label>
+            <div class="pass-wrap">
+                <input type="password" id="regPass" placeholder="Tối thiểu 6 ký tự">
+                <button type="button" class="pass-toggle-btn" onclick="togglePassVis('regPass', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
+        <div class="field"><label>Xác nhận mật khẩu</label>
+            <div class="pass-wrap">
+                <input type="password" id="regPassConfirm" placeholder="Nhập lại mật khẩu">
+                <button type="button" class="pass-toggle-btn" onclick="togglePassVis('regPassConfirm', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
         <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="register()">Khởi tạo tài khoản</button>
         <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy bỏ</button>
     </div>
@@ -215,9 +234,24 @@
         </div>
         
         <h3 style="font-size:14px; margin-bottom:10px; color:var(--text-secondary);">Đổi mật khẩu</h3>
-        <div class="field"><label>Mật khẩu cũ</label><input type="password" id="profOldPass" placeholder="••••••••"></div>
-        <div class="field"><label>Mật khẩu mới</label><input type="password" id="profNewPass" placeholder="••••••••"></div>
-        <div class="field"><label>Xác nhận mật khẩu mới</label><input type="password" id="profConfirmPass" placeholder="••••••••"></div>
+        <div class="field"><label>Mật khẩu cũ</label>
+            <div class="pass-wrap">
+                <input type="password" id="profOldPass" placeholder="••••••••">
+                <button type="button" class="pass-toggle-btn" onclick="togglePassVis('profOldPass', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
+        <div class="field"><label>Mật khẩu mới</label>
+            <div class="pass-wrap">
+                <input type="password" id="profNewPass" placeholder="••••••••">
+                <button type="button" class="pass-toggle-btn" onclick="togglePassVis('profNewPass', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
+        <div class="field"><label>Xác nhận mật khẩu mới</label>
+            <div class="pass-wrap">
+                <input type="password" id="profConfirmPass" placeholder="••••••••">
+                <button type="button" class="pass-toggle-btn" onclick="togglePassVis('profConfirmPass', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
         <button class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:10px;" onclick="changePassword()">Cập nhật mật khẩu</button>
         
         <hr style="border:0; border-top:1px solid var(--border-color); margin:16px 0;">
@@ -302,6 +336,15 @@
             createToast("Đăng ký thành công! Hãy đăng nhập.", "success");
             closeAllModals(); openModal('modalLogin');
         } catch(e) { createToast("Lỗi kết nối máy chủ.", "error"); }
+    }
+
+    function togglePassVis(inputId, btn) {
+        const input = document.getElementById(inputId);
+        const icon = btn.querySelector('i');
+        const isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        icon.classList.toggle('fa-eye', !isHidden);
+        icon.classList.toggle('fa-eye-slash', isHidden);
     }
 
     async function login() {

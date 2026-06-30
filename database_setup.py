@@ -89,6 +89,7 @@ def create_master_database():
                 download_status VARCHAR(20) DEFAULT 'PENDING'
                                 CHECK(download_status IN ('PENDING','SUCCESS','FAILED')),
                 downloaded_at   TIMESTAMP DEFAULT (datetime('now','localtime')),
+                UNIQUE (user_id, asset_id),
                 FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
                 FOREIGN KEY (asset_id) REFERENCES media_assets(id) ON DELETE CASCADE
             )
