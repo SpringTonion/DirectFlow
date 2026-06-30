@@ -1,6 +1,8 @@
 import os
 from flask import send_file
 import tempfile
+import subprocess
+import uuid
 import logging
 from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
@@ -16,12 +18,10 @@ import auth_service
 import media_service
 import cache_service
 import download_service
-import playlist_service
 import user_library_service 
 from youtube_service import resolve_youtube_url 
 from database_setup import get_connection, create_master_database
 from cache_service import get_cache
-from merge_service import merge_video_audio # <-- ĐÃ IMPORT SERVICE MỚI
 
 load_dotenv()
 create_master_database()
@@ -44,6 +44,7 @@ jwt = JWTManager(app)
 
 def admin_required(fn):
     @wraps(fn)
+    @jwt_required()
     def wrapper(*args, **kwargs):
         if get_jwt().get('role') != 'admin':
             return jsonify({'error': 'Cảnh báo: Khu vực chỉ dành cho Quản trị viên!'}), 403
@@ -88,11 +89,27 @@ def get_me():
     if not user: return jsonify({'error': 'User not found'}), 404
     return jsonify(user)
 
+@app.route('/users/me/password', methods=['PUT'])
+@jwt_required()
+def update_my_password():
+    data = request.json or {}
+    res = auth_service.change_password(int(get_jwt_identity()), data.get('old_password'), data.get('new_password'))
+    if not res['success']: return jsonify({'error': res['message']}), 400
+    return jsonify({'success': True})
+
+@app.route('/users/me', methods=['DELETE'])
+@jwt_required()
+def delete_my_account():
+    with get_connection() as conn:
+        conn.execute("DELETE FROM users WHERE id = ?", (int(get_jwt_identity()),))
+        conn.commit()
+    return jsonify({'success': True})
+
 # =====================================================================
-# 2. MEDIA RESOLVE
+# 2. MEDIA RESOLVE (ĐÃ MỞ KHÓA CHO KHÁCH: optional=True)
 # =====================================================================
 @app.route('/media/resolve', methods=['POST'])
-@jwt_required()
+@jwt_required(optional=True)
 def resolve_media():
     data = request.json or {}
     url = data.get('url')
@@ -130,119 +147,231 @@ def resolve_media():
 def get_media_formats(asset_id):
     return jsonify([{'quality': f['quality'], 'format': 'mp4'} for f in cache_service.get_all_cache_for_asset(asset_id)])
 
+
 # =====================================================================
-# 3. DOWNLOADS & STORAGE (BỔ SUNG API XÓA KHO LƯU TRỮ)
+# 3. DOWNLOADS & GUEST (VIẾT LẠI SQL TRỰC TIẾP, AN TOÀN TUYỆT ĐỐI)
 # =====================================================================
 @app.route('/users/me/downloads_sorted', methods=['GET'])
 @jwt_required()
 def get_my_downloads_with_sorting():
-    return jsonify(user_library_service.get_user_saved_media(int(get_jwt_identity()), request.args.get('sort_by', 'date_saved'), request.args.get('order', 'DESC')))
+    user_id = int(get_jwt_identity())
+    sort_by = request.args.get('sort_by', 'date_saved')
+    order = request.args.get('order', 'DESC')
+    return jsonify(user_library_service.get_user_saved_media(user_id, sort_by, order))
 
 @app.route('/downloads', methods=['POST'])
 @jwt_required()
 def create_download():
     data = request.json or {}
-    result = download_service.record_download(int(data.get('asset_id')), data.get('quality'), int(get_jwt_identity()), request.remote_addr)
-    if not result['success'] and result.get('download_id') is None: return jsonify({'error': result['message']}), 400
-    return jsonify(result)
+    asset_id = data.get('asset_id')
+    quality = data.get('quality')
+    user_id = int(get_jwt_identity())
 
-# API XÓA KHỎI KHO LƯU TRỮ
-@app.route('/downloads/<int:asset_id>', methods=['DELETE'])
-@jwt_required()
-def delete_from_library(asset_id):
-    user_id = get_jwt_identity()
-    with get_connection() as conn:
-        conn.execute("DELETE FROM user_downloads WHERE user_id = ? AND asset_id = ?", (int(user_id), asset_id))
-        conn.commit()
-    return jsonify({"success": True})
+    if not asset_id or not quality: 
+        return jsonify({'error': 'Thiếu tham số tải'}), 400
+
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            # Ghi trực tiếp vào kho, không qua service để tránh lỗi
+            cursor.execute('''
+                INSERT INTO user_downloads (user_id, asset_id, format_selected, download_status)
+                VALUES (?, ?, ?, 'SUCCESS')
+            ''', (user_id, int(asset_id), quality))
+            download_id = cursor.lastrowid
+            conn.commit()
+        return jsonify({'success': True, 'download_id': download_id, 'status': 'SUCCESS'})
+    except Exception as e:
+        return jsonify({'error': f"Lỗi lưu kho: {str(e)}"}), 500
+
+@app.route('/downloads/guest/file', methods=['GET'])
+def guest_download_file():
+    asset_id = request.args.get('asset_id', type=int)
+    quality = request.args.get('quality')
+    if not asset_id or not quality: return jsonify({'error': 'Thiếu tham số'}), 400
+    
+    if quality in ("audio", "thumbnail"):
+        cache = cache_service.get_cache(asset_id, quality)
+        return redirect(cache['download_url']) if cache else ("Hết hạn", 404)
+        
+    vc = cache_service.get_cache(asset_id, quality)
+    ac = cache_service.get_cache(asset_id, "audio")
+    if not vc or not ac: return "Luồng đã hết hạn, vui lòng cào lại link", 404
+    
+    try: 
+        from merge_service import merge_video_audio
+        return send_file(merge_video_audio(vc["download_url"], ac["download_url"]), as_attachment=True, download_name=f"Guest_{quality}.mp4", mimetype="video/mp4")
+    except Exception as e: return f"Lỗi đóng gói: {str(e)}", 500
 
 @app.route('/downloads/<int:download_id>/file', methods=['GET'])
 @jwt_required()
 def get_download_file(download_id):
-    download = download_service.get_download_by_id(download_id)
-    if not download: return jsonify({'error': 'Download không tồn tại'}), 404
-    if download['user_id'] != int(get_jwt_identity()): return jsonify({'error': 'Unauthorized'}), 403
-
-    quality = download['format_selected']
-
-    if quality in ("audio", "thumbnail"):
-        cache = cache_service.get_cache(download['asset_id'], quality)
-        if not cache: return jsonify({'error': f'{quality} đã hết hạn'}), 404
-        return redirect(cache['download_url'])
-
-    # GỘP VIDEO + AUDIO BẰNG MERGE_SERVICE MỚI
-    video_cache = cache_service.get_cache(download['asset_id'], quality)
-    audio_cache = cache_service.get_cache(download['asset_id'], "audio")
-
-    if not video_cache or not audio_cache:
-        return jsonify({'error': 'Luồng Video hoặc Audio đã hết hạn, vui lòng cào lại link'}), 404
-
     try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT asset_id, format_selected, user_id FROM user_downloads WHERE id = ?", (download_id,))
+            download = cursor.fetchone()
+            
+        if not download or download['user_id'] != int(get_jwt_identity()): 
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        quality = download['format_selected']
+        if quality in ("audio", "thumbnail"):
+            cache = cache_service.get_cache(download['asset_id'], quality)
+            return redirect(cache['download_url']) if cache else (jsonify({'error': 'Hết hạn'}), 404)
+
+        video_cache = cache_service.get_cache(download['asset_id'], quality)
+        audio_cache = cache_service.get_cache(download['asset_id'], "audio")
+        if not video_cache or not audio_cache: return jsonify({'error': 'Video/Audio hết hạn'}), 404
+
+        from merge_service import merge_video_audio
         output_path = merge_video_audio(video_cache["download_url"], audio_cache["download_url"])
         return send_file(output_path, as_attachment=True, download_name=f"DirectFlow_{quality}.mp4", mimetype="video/mp4")
-    except Exception as e:
+    except Exception as e: 
         return jsonify({"error": str(e)}), 500
 
 @app.route('/users/me/downloads', methods=['GET'])
 @jwt_required()
 def get_my_downloads():
-    return jsonify(download_service.get_user_download_history(int(get_jwt_identity())))
-
-# =====================================================================
-# 4. PLAYLISTS
-# =====================================================================
-@app.route('/playlists/ensure_favorite', methods=['POST'])
-@jwt_required()
-def ensure_favorite_playlist():
     user_id = int(get_jwt_identity())
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM playlists WHERE user_id = ? AND name = 'Favorite'", (user_id,))
-        row = cursor.fetchone()
-        if row: return jsonify({'success': True, 'playlist_id': row['id']})
-    return jsonify(playlist_service.create_playlist(user_id, "Favorite", is_public=False))
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT ud.id, ud.asset_id, ma.title, ma.platform, ud.format_selected, ud.download_status, ud.downloaded_at
+                FROM user_downloads ud
+                JOIN media_assets ma ON ud.asset_id = ma.id
+                WHERE ud.user_id = ?
+                ORDER BY ud.downloaded_at DESC
+            ''', (user_id,))
+            return jsonify({'history': [dict(r) for r in cursor.fetchall()]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
+@app.route('/downloads/<int:download_id>', methods=['DELETE'])
+@jwt_required()
+def delete_download(download_id):
+    user_id = int(get_jwt_identity())
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM user_downloads WHERE id = ?", (download_id,))
+            row = cursor.fetchone()
+            if not row or row['user_id'] != user_id:
+                return jsonify({'error': 'Bạn không có quyền xóa mục này.'}), 403
+            conn.execute("DELETE FROM user_downloads WHERE id = ?", (download_id,))
+            conn.commit()
+        return jsonify({'success': True, 'message': 'Đã xóa khỏi kho lưu trữ.'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================================
+# 4. PLAYLISTS (Đi qua user_library_service — đã gộp playlist_service.py)
+# =====================================================================
 @app.route('/users/me/playlists', methods=['GET'])
 @jwt_required()
 def get_playlists():
-    return jsonify(playlist_service.get_user_playlists(int(get_jwt_identity())))
+    user_id = int(get_jwt_identity())
+    return jsonify(user_library_service.get_user_playlists(user_id))
 
 @app.route('/playlists', methods=['POST'])
 @jwt_required()
 def create_playlist():
-    data = request.json or {}
-    result = playlist_service.create_playlist(int(get_jwt_identity()), data.get('name'), int(data.get('is_public', False)))
+    user_id = int(get_jwt_identity())
+    name = (request.json or {}).get('name')
+    result = user_library_service.create_playlist(user_id, name)
     if not result['success']: return jsonify({'error': result['message']}), 400
+    return jsonify(result)
+
+@app.route('/playlists/<int:playlist_id>', methods=['DELETE'])
+@jwt_required()
+def delete_playlist(playlist_id):
+    user_id = int(get_jwt_identity())
+    result = user_library_service.delete_playlist(playlist_id, user_id)
+    if not result['success']: return jsonify({'error': result['message']}), 403
     return jsonify(result)
 
 @app.route('/playlists/<int:playlist_id>/items', methods=['POST'])
 @jwt_required()
 def add_to_playlist(playlist_id):
     user_id = int(get_jwt_identity())
-    asset_id = request.json.get('asset_id')
-    
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT asset_id FROM playlist_items WHERE playlist_id = ? AND asset_id = ?", (playlist_id, int(asset_id)))
-        if cursor.fetchone():
-            conn.execute("DELETE FROM playlist_items WHERE playlist_id = ? AND asset_id = ?", (playlist_id, int(asset_id)))
-            conn.commit()
-            return jsonify({'success': True, 'action': 'removed', 'message': 'Đã bỏ khỏi danh sách'})
-
-    result = playlist_service.add_to_playlist(playlist_id, int(asset_id), user_id)
-    if not result['success']: return jsonify({'error': result['message']}), 400
-    result['action'] = 'added'
+    asset_id = int((request.json or {}).get('asset_id'))
+    result = user_library_service.add_to_playlist(playlist_id, asset_id, user_id)
+    if not result['success']: return jsonify({'error': result['message']}), 403
     return jsonify(result)
 
 @app.route('/playlists/<int:playlist_id>/items', methods=['GET'])
 @jwt_required()
 def get_playlist_items(playlist_id):
-    result = playlist_service.get_playlist_contents(playlist_id, int(get_jwt_identity()))
-    if not result['success']: return jsonify({'error': result['message']}), 400
+    user_id = int(get_jwt_identity())
+    result = user_library_service.get_playlist_contents(playlist_id, user_id)
+    if not result['success']: return jsonify({'error': result['message']}), 403
     return jsonify(result['items'])
 
-@app.route('/health', methods=['GET'])
-def health(): return jsonify({'status': 'ok'})
+@app.route('/playlists/<int:playlist_id>/items/<int:asset_id>', methods=['DELETE'])
+@jwt_required()
+def remove_playlist_item(playlist_id, asset_id):
+    user_id = int(get_jwt_identity())
+    result = user_library_service.add_to_playlist(playlist_id, asset_id, user_id)  # toggle: nếu đang có sẽ xóa
+    if not result['success']: return jsonify({'error': result['message']}), 403
+    return jsonify(result)
+
+# =====================================================================
+# 4B. FAVORITES (bảng `favorites` riêng — kết nối thật vào DB)
+# =====================================================================
+@app.route('/users/me/favorites', methods=['GET'])
+@jwt_required()
+def get_my_favorites():
+    user_id = int(get_jwt_identity())
+    return jsonify(user_library_service.get_user_favorites(user_id))
+
+@app.route('/favorites/toggle', methods=['POST'])
+@jwt_required()
+def toggle_favorite():
+    user_id = int(get_jwt_identity())
+    asset_id = (request.json or {}).get('asset_id')
+    if not asset_id: return jsonify({'error': 'Thiếu asset_id'}), 400
+    result = user_library_service.toggle_favorite(user_id, asset_id)
+    if not result['success']: return jsonify({'error': result['message']}), 400
+    return jsonify(result)
+
+# =====================================================================
+# 5. ADMIN DASHBOARD (PHỤC HỒI API)
+# =====================================================================
+@app.route('/admin/dashboard', methods=['GET'])
+@admin_required
+def admin_dashboard():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        users_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM media_assets")
+        assets_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM user_downloads")
+        dl_count = cursor.fetchone()[0]
+    return jsonify({
+        'total_users': users_count,
+        'total_assets': assets_count,
+        'total_downloads': dl_count
+    })
+
+@app.route('/admin/users', methods=['GET'])
+@admin_required
+def admin_get_users():
+    return jsonify(auth_service.get_all_users_admin(request.args.get('page', 1, type=int), 50))
+
+@app.route('/admin/users/<int:target_user_id>', methods=['PUT'])
+@admin_required
+def admin_modify_user(target_user_id):
+    data = request.json or {}
+    return jsonify(auth_service.modify_user_admin(target_user_id, int(data.get('is_active', 1)), data.get('role', 'member')))
+
+@app.route('/admin/users/<int:target_user_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_user(target_user_id):
+    if target_user_id == int(get_jwt_identity()): return jsonify({'error': 'Cannot delete self'}), 400
+    return jsonify(auth_service.delete_user_admin(target_user_id))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8000)))

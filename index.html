@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DirectFlow - Media Management Platform</title>
+    <title>DirectFlow - System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <style>
+        /* ===== CSS CƠ BẢN ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg-primary: #f6f8fa; --bg-secondary: #ffffff;
@@ -23,12 +24,30 @@
         .header-actions { display: flex; align-items: center; gap: 12px; }
         .btn { padding: 8px 18px; border: none; border-radius: 30px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; background: var(--border-color); color: var(--text-secondary); }
         .btn-primary { background: var(--accent); color: #fff; }
-        .btn-primary:hover { background: #5a4bd1; transform: scale(1.02); }
-        .btn-outline { background: transparent; border: 1.5px solid var(--border-color); }
-        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
         .btn-danger { background: var(--red); color: #fff; }
-        .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; }
+        .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; cursor: pointer; transition: 0.2s;}
+        .avatar:hover { transform: scale(1.05); background: var(--accent); }
+        
+        .card { background: var(--bg-secondary); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border-color); padding: 20px; margin-bottom: 24px;}
+        .section-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        
+        /* GIAO DIỆN ADMIN */
+        #adminDashboard { display: none; }
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-box { background: #fff; border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); border: 1px solid var(--border-color); text-align: center; }
+        .stat-num { font-size: 32px; font-weight: bold; color: var(--accent); margin: 10px 0; }
+        .stat-label { font-size: 14px; color: var(--text-secondary); font-weight: 600; }
+        .log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .log-table th, .log-table td { padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: middle; }
+        .log-table th { background: var(--bg-primary); color: var(--text-secondary); font-weight: 600; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-block; }
+        .badge.admin { background: #fee2e2; color: #991b1b; }
+        .badge.member { background: #d1fae5; color: #065f46; }
+        .badge.locked { background: #f1f5f9; color: #64748b; text-decoration: line-through; }
+        .admin-action-btn { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; border: 1px solid var(--border-color); cursor: pointer; background: #fff; margin-right: 4px;}
+        .btn-text-red { color: var(--red); border-color: #fecdd3;}
 
+        /* GIAO DIỆN MEDIA/GUEST */
         .search-section { background: var(--bg-secondary); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px; border: 1px solid var(--border-color); }
         .search-bar { display: flex; align-items: center; gap: 12px; }
         .input-wrap { flex: 1; position: relative; }
@@ -36,11 +55,9 @@
         .search-bar input { width: 100%; padding: 12px 16px 12px 46px; border-radius: 30px; border: 1.5px solid var(--border-color); background: var(--bg-primary); font-size: 14px; outline: none; transition: 0.2s; }
         .search-bar input:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 4px rgba(108,92,231,0.1); }
         .search-btn { padding: 12px 32px; border-radius: 30px; border: none; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .search-btn:hover { background: #5a4bd1; }
-
+        
         .live-preview-section { display: none; margin-bottom: 24px; }
         .big-video-card { background: #fff; border: 2px solid var(--accent-light); border-radius: var(--radius); padding: 24px; box-shadow: 0 10px 30px rgba(108,92,231,0.08); display: flex; gap: 24px; }
-        @media (max-width: 768px) { .big-video-card { flex-direction: column; } }
         .big-thumb-box { width: 320px; height: 180px; border-radius: var(--radius-sm); overflow: hidden; position: relative; flex-shrink: 0; background: #000; }
         .big-thumb-box img { width: 100%; height: 100%; object-fit: cover; }
         .big-thumb-box .big-duration { position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.8); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
@@ -49,59 +66,33 @@
         .big-meta { font-size: 13px; color: var(--text-secondary); display: flex; gap: 16px; margin-bottom: 16px; }
         .big-actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; align-items: center; }
 
-        .filter-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
-        .tab-btn { padding: 8px 20px; border-radius: 30px; font-size: 13px; font-weight: 600; border: 1px solid var(--border-color); background: #fff; color: var(--text-secondary); cursor: pointer; transition: 0.15s; }
-        .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-        .sort-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: #fff; padding: 12px 20px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); }
-        .sort-group { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-        .sort-group select { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); outline: none; cursor: pointer; }
-
         .grid-2col { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; transition: 0.3s ease-in-out; }
         .grid-expand { grid-template-columns: 1fr 1.2fr !important; }
-        
-        .section-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .section-title span { font-size: 12px; background: var(--border-color); padding: 2px 10px; border-radius: 20px; color: var(--text-secondary); }
-        .card { background: var(--bg-secondary); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border-color); overflow: hidden; }
-        .card-body { padding: 20px; }
 
         .video-item { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
-        .video-item:last-child { border-bottom: none; }
         .video-thumb { width: 140px; height: 85px; border-radius: var(--radius-sm); overflow: hidden; position: relative; flex-shrink: 0; background: #cbd5e1; }
         .video-thumb img { width: 100%; height: 100%; object-fit: cover; }
         .video-thumb .duration { position: absolute; bottom: 4px; right: 6px; background: rgba(0,0,0,0.75); color: #fff; font-size: 11px; padding: 1px 5px; border-radius: 3px; }
         .video-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
         .video-title { font-weight: 600; font-size: 14px; color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .video-meta { font-size: 12px; color: var(--text-tertiary); display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0; }
-        .video-actions { display: flex; gap: 6px; }
+        .video-actions { display: flex; gap: 6px; margin-top: 6px; }
         .btn-action { padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); background: #fff; display: inline-flex; align-items: center; gap: 4px; transition: 0.15s; color: var(--text-secondary); }
         .btn-action.dl { background: var(--green); color: #fff; border-color: var(--green); }
-        .btn-action.dl:hover { background: #059669; }
         .btn-action.fav-active { color: var(--red) !important; border-color: #fecdd3; background: #fff1f2; font-weight: bold; }
-        .btn-action.del { color: var(--red); border-color: #ffe4e6; }
-        .btn-action.del:hover { background: #ffe4e6; }
 
         .list-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border-color); font-size: 13px; transition: 0.2s; border-radius: var(--radius-sm); cursor: pointer; }
         .list-item:hover { background: #f1f5f9; }
         .list-item.active-view { background: rgba(108, 92, 231, 0.08); border-left: 4px solid var(--accent); }
-        .item-desc { display: flex; align-items: center; gap: 8px; }
-
-        .playlist-viewer-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; background: #ffeaa7; padding: 10px 16px; border-radius: var(--radius-sm); color: #c0392b; font-weight: bold; font-size: 14px; }
-        .status-badge { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; }
-        .status-badge.success { background: #d1fae5; color: #065f46; }
-        .status-badge.pending { background: #fef3c7; color: #92400e; }
-        .status-badge.failed { background: #fee2e2; color: #991b1b; }
-
+        
+        /* TOAST & MODAL */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: #fff; padding: 12px 20px; border-radius: var(--radius-sm); box-shadow: var(--shadow); border-left: 4px solid var(--accent); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 999; align-items: center; justify-content: center; }
         .modal-overlay.open { display: flex; }
         .modal { background: #fff; border-radius: var(--radius); padding: 30px; max-width: 440px; width: 100%; box-shadow: 0 25px 50px rgba(0,0,0,0.15); max-height: 85vh; overflow-y: auto; }
         .field { margin-bottom: 14px; }
         .field label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px; }
         .field input, .field select { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border-color); border-radius: var(--radius-sm); font-size: 14px; outline: none; }
-        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast { background: #fff; padding: 12px 20px; border-radius: var(--radius-sm); box-shadow: 0 10px 15px rgba(0,0,0,0.05); border-left: 4px solid var(--accent); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; pointer-events: auto; }
-        .toast.error { border-left-color: var(--red); }
-        .toast.success { border-left-color: var(--green); }
         .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
@@ -114,77 +105,79 @@
         <div class="header-actions">
             <button class="btn btn-outline" id="btnOpenLogin" onclick="openModal('modalLogin')"><i class="fas fa-sign-in-alt"></i> Đăng nhập</button>
             <button class="btn btn-primary" id="btnOpenRegister" onclick="openModal('modalRegister')"><i class="fas fa-user-plus"></i> Đăng ký</button>
-            <div class="avatar" id="userAvatar" style="display:none;">U</div>
-            <button class="btn btn-danger" id="btnLogout" style="display:none;" onclick="logout()"><i class="fas fa-power-off"></i></button>
+            <button class="btn btn-danger" id="btnLogout" style="display:none;" onclick="logout()"><i class="fas fa-power-off"></i> Đăng xuất</button>
+            <div class="avatar" id="userAvatar" style="display:none;" onclick="openModal('modalProfile')">U</div>
         </div>
     </header>
 
-    <section class="search-section">
-        <div class="search-bar">
-            <div class="input-wrap">
-                <i class="fas fa-link"></i>
-                <input type="url" id="urlInput" placeholder="Dán liên kết video YouTube tại đây để trích xuất dữ liệu..." />
-            </div>
-            <button class="search-btn" onclick="resolveUrl()"><i class="fas fa-arrow-right"></i> Xử lý URL</button>
+    <div id="adminDashboard">
+        <div class="section-title"><i class="fas fa-shield-halved" style="color:var(--red);"></i> KHU VỰC QUẢN TRỊ HỆ THỐNG</div>
+        <div class="stat-grid">
+            <div class="stat-box"><div class="stat-label">Tổng người dùng</div><div class="stat-num" id="adUsers">0</div></div>
+            <div class="stat-box"><div class="stat-label">Video lưu kho</div><div class="stat-num" id="adAssets">0</div></div>
+            <div class="stat-box"><div class="stat-label">Tiến trình tải</div><div class="stat-num" id="adDls">0</div></div>
         </div>
-    </section>
-
-    <section class="live-preview-section" id="previewSection">
-        <div class="section-title" style="color:var(--accent);"><i class="fas fa-circle-dot"></i> Luồng dữ liệu video vừa trích xuất thành công</div>
-        <div class="big-video-card" id="previewCardBody"></div>
-    </section>
-
-    <div class="grid-2col" id="workspaceGrid">
-        <div>
-            <div class="filter-tabs">
-                <button class="tab-btn active" id="tabAllMedia" onclick="switchLibraryTab('all')"><i class="fas fa-folder-open"></i> Kho dữ liệu lưu trữ</button>
-            </div>
-
-            <div class="sort-bar">
-                <div class="sort-group">
-                    <i class="fas fa-sort-amount-down" style="color:var(--accent);"></i>
-                    <label>Sắp xếp theo:</label>
-                    <select id="selectSort" onchange="loadSavedMedia()">
-                        <option value="date_saved">📅 Ngày lưu kho</option>
-                        <option value="views">🔥 Lượt xem gốc</option>
-                        <option value="duration">⏳ Thời lượng video</option>
-                        <option value="title">🔤 Tiêu đề (A-Z)</option>
-                    </select>
-                    <select id="selectOrder" onchange="loadSavedMedia()">
-                        <option value="DESC">Giảm dần</option>
-                        <option value="ASC">Tăng dần</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="section-title">
-                <i class="fas fa-photo-film" style="color:var(--accent);"></i> Danh sách dữ liệu
-                <span id="assetCount">0 mục</span>
-            </div>
-            <div class="card" style="margin-bottom: 24px;">
-                <div class="card-body" id="mediaContainer">
-                    <div style="text-align:center; color:var(--text-tertiary); padding:40px 0;">Hãy đăng nhập để đồng bộ kho dữ liệu cá nhân.</div>
-                </div>
-            </div>
-
-            <div class="section-title"><i class="fas fa-clock-rotate-left" style="color:var(--green);"></i> Trạng Thái Tiến Trình File Tải Về</div>
-            <div class="card"><div class="card-body" id="historyContainer"><div style="text-align:center; color:var(--text-tertiary); padding:15px 0;">Chưa có dữ liệu tiến trình</div></div></div>
+        <div class="card">
+            <div class="section-title" style="margin-bottom:16px;"><i class="fas fa-users-gear"></i> Quản Lý Tài Khoản Thành Viên</div>
+            <table class="log-table">
+                <thead><tr><th>ID</th><th>Tài khoản</th><th>Chức vụ</th><th>Trạng thái</th><th>Ngày tạo</th><th>Hành động Quản trị</th></tr></thead>
+                <tbody id="adminUserTableBody"><tr><td colspan="6" style="text-align:center;">Đang tải dữ liệu...</td></tr></tbody>
+            </table>
         </div>
+    </div>
 
-        <div>
-            <div class="section-title">
-                <i class="fas fa-folder-plus" style="color:var(--orange);"></i> Danh Sách Phát (Playlists)
-                <button class="btn btn-primary" style="padding:4px 12px; font-size:11px; margin-left:auto;" onclick="openModal('modalCreatePlaylist')"><i class="fas fa-plus"></i> Tạo Playlist</button>
-            </div>
-            <div class="card" style="margin-bottom: 24px;">
-                <div class="card-body" id="playlistContainer" style="padding: 10px 0;">
-                    <div style="text-align:center; color:var(--text-tertiary); padding:20px 0;">Đăng nhập để xem danh sách phát</div>
+    <div id="mainWorkspace">
+        <section class="search-section">
+            <div class="search-bar">
+                <div class="input-wrap">
+                    <i class="fas fa-link"></i>
+                    <input type="url" id="urlInput" placeholder="Dán liên kết video YouTube tại đây để trích xuất dữ liệu..." />
                 </div>
+                <button class="search-btn" onclick="resolveUrl()"><i class="fas fa-arrow-right"></i> Xử lý URL</button>
+            </div>
+        </section>
+
+        <section class="live-preview-section" id="previewSection">
+            <div class="section-title" style="color:var(--accent);"><i class="fas fa-circle-dot"></i> Luồng dữ liệu video vừa trích xuất thành công</div>
+            <div class="big-video-card" id="previewCardBody"></div>
+        </section>
+
+        <div class="grid-2col" id="workspaceGrid">
+            <div>
+                <div class="section-title"><i class="fas fa-photo-film" style="color:var(--accent);"></i> Kho Dữ Liệu <span id="assetCount">0 mục</span>
+                    <span id="sortControls" style="display:none; margin-left:auto; display:flex; gap:6px; align-items:center;">
+                        <select id="sortBySelect" onchange="onSortCriteriaChange()" style="font-size:11px; padding:4px 8px; border-radius:8px; border:1px solid var(--border-color); outline:none;">
+                            <option value="date_saved">Ngày lưu</option>
+                            <option value="title">Tên video (A-Z)</option>
+                            <option value="duration">Thời lượng</option>
+                            <option value="views">Lượt xem</option>
+                        </select>
+                        <select id="sortOrderSelect" onchange="loadSavedMedia()" style="font-size:11px; padding:4px 8px; border-radius:8px; border:1px solid var(--border-color); outline:none;"></select>
+                    </span>
+                </div>
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-body" id="mediaContainer">
+                        <div style="text-align:center; color:var(--text-tertiary); padding:40px 0;">Hãy đăng nhập để đồng bộ kho dữ liệu cá nhân.</div>
+                    </div>
+                </div>
+                <div class="section-title"><i class="fas fa-clock-rotate-left" style="color:var(--green);"></i> Trạng Thái Tiến Trình File Tải Về</div>
+                <div class="card"><div class="card-body" id="historyContainer"><div style="text-align:center; color:var(--text-tertiary); padding:15px 0;">Chưa có dữ liệu tiến trình</div></div></div>
             </div>
 
-            <div id="playlistExpandedViewer" style="display: none;">
-                <div class="playlist-viewer-header" id="expandedHeaderTitle"></div>
-                <div class="card"><div class="card-body" id="playlistItemsContent" style="padding: 10px;"></div></div>
+            <div>
+                <div class="section-title">
+                    <i class="fas fa-folder-plus" style="color:var(--orange);"></i> Thư Mục Danh Sách Phát
+                    <button class="btn btn-primary" id="btnCreatePl" style="padding:4px 12px; font-size:11px; margin-left:auto; display:none;" onclick="openModal('modalCreatePlaylist')"><i class="fas fa-plus"></i> Tạo Playlist</button>
+                </div>
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-body" id="playlistContainer" style="padding: 10px 0;">
+                        <div style="text-align:center; color:var(--text-tertiary); padding:20px 0;">Đăng nhập để xem danh sách phát</div>
+                    </div>
+                </div>
+                <div id="playlistExpandedViewer" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px; background: #ffeaa7; padding: 10px 16px; border-radius: var(--radius-sm); color: #c0392b; font-weight: bold; font-size: 14px;" id="expandedHeaderTitle"></div>
+                    <div class="card"><div class="card-body" id="playlistItemsContent" style="padding: 10px;"></div></div>
+                </div>
             </div>
         </div>
     </div>
@@ -195,8 +188,8 @@
         <h2><i class="fas fa-user-shield" style="color:var(--accent);"></i> Đăng nhập hệ thống</h2>
         <div class="field"><label>Tên đăng nhập / Email</label><input type="text" id="loginIdent" placeholder="Username hoặc Email"></div>
         <div class="field"><label>Mật khẩu</label><input type="password" id="loginPass" placeholder="••••••••"></div>
-        <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="login()">Xác nhận vào hệ thống</button>
-        <button class="btn btn-outline" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy bỏ</button>
+        <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="login()">Đăng Nhập</button>
+        <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy bỏ</button>
     </div>
 </div>
 
@@ -204,19 +197,33 @@
     <div class="modal">
         <h2><i class="fas fa-user-plus" style="color:var(--accent);"></i> Đăng ký thành viên</h2>
         <div class="field"><label>Tên tài khoản (Username)</label><input type="text" id="regUser" placeholder="Ví dụ: van_a_2026"></div>
-        <div class="field"><label>Địa chỉ Email</label><input type="email" id="regEmail" placeholder="yourname@gmail.com"></div>
+        <div class="field"><label>Địa chỉ Email</label><input type="email" id="regEmail" placeholder="Bắt buộc nhập email"></div>
         <div class="field"><label>Mật khẩu bảo mật</label><input type="password" id="regPass" placeholder="Tối thiểu 6 ký tự"></div>
+        <div class="field"><label>Xác nhận mật khẩu</label><input type="password" id="regPassConfirm" placeholder="Nhập lại mật khẩu"></div>
         <button class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;" onclick="register()">Khởi tạo tài khoản</button>
-        <button class="btn btn-outline" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy bỏ</button>
+        <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy bỏ</button>
     </div>
 </div>
 
-<div class="modal-overlay" id="modalCreatePlaylist">
+<div class="modal-overlay" id="modalProfile">
     <div class="modal">
-        <h2><i class="fas fa-folder-open" style="color:var(--orange);"></i> Tạo thư mục Playlist mới</h2>
-        <div class="field"><label>Tên danh sách</label><input type="text" id="plName" placeholder="Nhập tên danh sách phát..."></div>
-        <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="createPlaylist()">Xác nhận tạo</button>
-        <button class="btn btn-outline" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Đóng</button>
+        <h2><i class="fas fa-id-card" style="color:var(--accent);"></i> Hồ Sơ Tài Khoản</h2>
+        <div style="background:var(--bg-primary); padding:16px; border-radius:var(--radius-sm); margin-bottom:16px; font-size:14px;">
+            <div><b>Tài khoản:</b> <span id="profName"></span></div>
+            <div style="margin-top:6px;"><b>Email:</b> <span id="profEmail"></span></div>
+            <div style="margin-top:6px;"><b>Quyền:</b> <span id="profRole"></span></div>
+        </div>
+        
+        <h3 style="font-size:14px; margin-bottom:10px; color:var(--text-secondary);">Đổi mật khẩu</h3>
+        <div class="field"><label>Mật khẩu cũ</label><input type="password" id="profOldPass" placeholder="••••••••"></div>
+        <div class="field"><label>Mật khẩu mới</label><input type="password" id="profNewPass" placeholder="••••••••"></div>
+        <div class="field"><label>Xác nhận mật khẩu mới</label><input type="password" id="profConfirmPass" placeholder="••••••••"></div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:10px;" onclick="changePassword()">Cập nhật mật khẩu</button>
+        
+        <hr style="border:0; border-top:1px solid var(--border-color); margin:16px 0;">
+        <button class="btn btn-danger" style="width:100%; justify-content:center; margin-bottom:10px;" onclick="deleteAccount()"><i class="fas fa-trash"></i> Xóa tài khoản vĩnh viễn</button>
+        <button class="btn" style="width:100%; justify-content:center; border: 1.5px solid var(--border-color);" onclick="logout()"><i class="fas fa-power-off"></i> Đăng xuất</button>
+        <button class="btn" style="width:100%; justify-content:center; margin-top:8px; border:none;" onclick="closeAllModals()">Đóng</button>
     </div>
 </div>
 
@@ -225,7 +232,7 @@
         <h2><i class="fas fa-sliders" style="color:var(--green);"></i> Tùy chọn chất lượng file tải</h2>
         <div class="field"><label>Chọn định dạng phân giải mong muốn:</label><select id="qualitySelectNode"></select></div>
         <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="executeDownload()">Bắt đầu tải về máy</button>
-        <button class="btn btn-outline" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy</button>
+        <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy</button>
     </div>
 </div>
 
@@ -234,7 +241,16 @@
         <h2><i class="fas fa-folder-tree" style="color:var(--accent);"></i> Thêm vào Playlist</h2>
         <div class="field"><label>Chọn thư mục lưu trữ của bạn:</label><select id="playlistSelectBox"></select></div>
         <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="confirmPushToPlaylist()">Xác nhận thêm</button>
-        <button class="btn btn-outline" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy</button>
+        <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Hủy</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalCreatePlaylist">
+    <div class="modal">
+        <h2><i class="fas fa-folder-open" style="color:var(--orange);"></i> Tạo thư mục Playlist mới</h2>
+        <div class="field"><label>Tên danh sách</label><input type="text" id="plName" placeholder="Nhập tên..."></div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="createPlaylist()">Xác nhận tạo</button>
+        <button class="btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="closeAllModals()">Đóng</button>
     </div>
 </div>
 
@@ -243,10 +259,11 @@
 <script>
     const CONFIG_API = 'http://127.0.0.1:8000';
     let appToken = localStorage.getItem('df_auth_token') || null;
+    let currentUserData = null;
     let targetAssetId = null;
-    let currentLibraryMode = 'all'; 
-    let favoritePlaylistId = null; 
+    let favoriteAssetIds = new Set();
     let activePreviewData = null; 
+    let currentPlaylistViewId = null;
 
     function makeHeaders() {
         let h = { 'Content-Type': 'application/json' };
@@ -257,26 +274,27 @@
     function createToast(txt, mode = 'info') {
         const root = document.getElementById('toastRoot');
         const box = document.createElement('div');
-        box.className = `toast ${mode}`;
-        box.innerHTML = `<i class="fas ${mode==='success'?'fa-circle-check':'fa-triangle-exclamation'}"></i> ${txt}`;
+        box.className = `toast`;
+        if(mode==='error') box.style.borderLeftColor = 'var(--red)';
+        if(mode==='success') box.style.borderLeftColor = 'var(--green)';
+        box.innerHTML = `<i class="fas ${mode==='error'?'fa-triangle-exclamation':'fa-info-circle'}"></i> ${txt}`;
         root.appendChild(box);
-        setTimeout(() => box.remove(), 6000); // Kéo dài thời gian hiển thị thông báo
+        setTimeout(() => box.remove(), 4000);
     }
 
     function openModal(id) { document.getElementById(id).classList.add('open'); }
     function closeAllModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open')); }
 
-    function switchLibraryTab(mode) {
-        currentLibraryMode = mode;
-        document.getElementById('tabAllMedia').classList.toggle('active', mode === 'all');
-        loadSavedMedia();
-    }
-
+    // ==================== XÁC THỰC & HỒ SƠ ====================
     async function register() {
         const username = document.getElementById('regUser').value.trim();
         const email = document.getElementById('regEmail').value.trim();
         const password = document.getElementById('regPass').value;
-        if(!username || !password) return createToast("Thiếu thông tin!", "error");
+        const confirmPass = document.getElementById('regPassConfirm').value;
+        
+        if(!username || !password || !email) return createToast("Thiếu thông tin tài khoản!", "error");
+        if(password !== confirmPass) return createToast("Mật khẩu xác nhận không trùng khớp!", "error");
+
         try {
             const r = await fetch(`${CONFIG_API}/auth/register`, { method: 'POST', headers: makeHeaders(), body: JSON.stringify({ username, email, password }) });
             const d = await r.json();
@@ -292,62 +310,71 @@
         try {
             const r = await fetch(`${CONFIG_API}/auth/login`, { method: 'POST', headers: makeHeaders(), body: JSON.stringify({ email, password }) });
             const d = await r.json();
-            if(!r.ok) return createToast(d.error || "Mật khẩu hoặc tài khoản sai.", "error");
+            if(!r.ok) return createToast(d.error || "Lỗi đăng nhập", "error");
+            
             appToken = d.token;
             localStorage.setItem('df_auth_token', appToken);
             createToast("Đăng nhập thành công!", "success");
             closeAllModals();
-            await initAppSession(d.user.username);
-        } catch(e) { createToast("Lỗi kết nối máy chủ.", "error"); }
+            verifySession();
+        } catch(e) { createToast("Lỗi kết nối Server", "error"); }
     }
 
     function logout() {
         appToken = null; localStorage.clear();
-        createToast("Đã đăng xuất tài khoản.");
         location.reload();
     }
 
-    async function ensureFavoritePlaylistSetup() {
+    async function changePassword() {
+        const old_password = document.getElementById('profOldPass').value;
+        const new_password = document.getElementById('profNewPass').value;
+        const confirm_password = document.getElementById('profConfirmPass').value;
+        if(!old_password || !new_password) return createToast("Vui lòng điền đủ mật khẩu!", "error");
+        if(new_password !== confirm_password) return createToast("Mật khẩu mới không khớp xác nhận!", "error");
+
         try {
-            const r = await fetch(`${CONFIG_API}/playlists/ensure_favorite`, { method: 'POST', headers: makeHeaders() });
-            if(r.ok) {
-                const d = await r.json();
-                favoritePlaylistId = d.playlist_id;
-            }
-        } catch(e) {}
+            const r = await fetch(`${CONFIG_API}/users/me/password`, {
+                method: 'PUT', headers: makeHeaders(), body: JSON.stringify({ old_password, new_password })
+            });
+            const d = await r.json();
+            if(!r.ok) return createToast(d.error || "Đổi mật khẩu thất bại.", "error");
+            createToast("Đổi mật khẩu thành công!", "success");
+            closeAllModals();
+        } catch(e) { createToast("Lỗi kết nối", "error"); }
     }
 
-    // CHO PHÉP KHÁCH VÃNG LAI NHẬP URL KHÔNG CẦN LOGIN
+    async function deleteAccount() {
+        if(!confirm("CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản và toàn bộ dữ liệu?")) return;
+        try {
+            const r = await fetch(`${CONFIG_API}/users/me`, { method: 'DELETE', headers: makeHeaders() });
+            if(r.ok) {
+                createToast("Đã xóa tài khoản vĩnh viễn.", "success");
+                setTimeout(() => logout(), 1500);
+            }
+        } catch(e) { createToast("Lỗi hệ thống.", "error"); }
+    }
+
+    // ==================== CÀO URL VÀ PREVIEW ====================
     async function resolveUrl() {
-        const urlInputObj = document.getElementById('urlInput');
-        const url = urlInputObj.value.trim();
-        
+        const url = document.getElementById('urlInput').value.trim();
         if(!url) return createToast("Vui lòng nhập đường dẫn URL!", "error");
         
         const previewSection = document.getElementById('previewSection');
         const previewBody = document.getElementById('previewCardBody');
         previewSection.style.display = 'block';
-        previewBody.innerHTML = `<div style="text-align:center;width:100%;padding:20px;"><div class="loading"></div> Đang phân tích siêu dữ liệu URL...</div>`;
+        previewBody.innerHTML = `<div style="text-align:center;width:100%;padding:20px;"><div class="loading"></div> Đang phân tích siêu dữ liệu...</div>`;
         
         try {
             const r = await fetch(`${CONFIG_API}/media/resolve`, { method: 'POST', headers: makeHeaders(), body: JSON.stringify({ url }) });
             const d = await r.json();
             if(!r.ok) {
-                createToast(d.error || "Không bóc được dữ liệu link này.", "error");
-                previewSection.style.display = 'none';
-                return;
+                createToast(d.error || "Lỗi cào dữ liệu.", "error");
+                previewSection.style.display = 'none'; return;
             }
-            
             activePreviewData = d;
+            document.getElementById('urlInput').value = '';
             await renderBigPreviewCard();
-            
-            urlInputObj.value = '';
-            createToast("Phân giải siêu dữ liệu thành công!", "success");
-            
-        } catch(e) { 
-            createToast("Mất kết nối với Server.", "error"); 
-            previewSection.style.display = 'none'; 
-        }
+        } catch(e) { createToast("Lỗi kết nối.", "error"); previewSection.style.display = 'none'; }
     }
 
     async function renderBigPreviewCard() {
@@ -356,147 +383,48 @@
         const previewBody = document.getElementById('previewCardBody');
         const min = Math.floor(d.duration / 60);
         const sec = (d.duration % 60).toString().padStart(2, '0');
-        
-        let isFav = false;
-        if (appToken && favoritePlaylistId) {
-            try {
-                const r = await fetch(`${CONFIG_API}/playlists/${favoritePlaylistId}/items`, { headers: makeHeaders() });
-                if (r.ok) {
-                    const items = await r.json();
-                    isFav = items.some(item => item.asset_id === d.asset_id);
-                }
-            } catch(e) {}
-        }
 
-        const formatsArray = d.formats || [];
-        const realVideoFormats = formatsArray.filter(f => f.quality !== 'thumbnail' && f.quality !== 'audio');
+        const isFav = favoriteAssetIds.has(d.asset_id);
+
+        const realVideoFormats = d.formats.filter(f => f.quality !== 'thumbnail' && f.quality !== 'audio');
         const defaultQuality = realVideoFormats.length > 0 ? realVideoFormats[0].quality : '720p';
 
-        // Tự động điều chỉnh UI phụ thuộc vào trạng thái đăng nhập
-        let actionButtons = `<button class="btn-action dl" onclick="openDownloadFlow(${d.asset_id})"><i class="fas fa-download"></i> Chọn chất lượng & Tải</button>`;
-        if(appToken) {
+        // LÔGIC: KHÁCH VS THÀNH VIÊN
+        let actionButtons = `<button class="btn-action dl" onclick="openDownloadFlow(${d.asset_id})"><i class="fas fa-download"></i> Tải ngay</button>`;
+        
+        if(appToken && currentUserData && currentUserData.role !== 'admin') {
             actionButtons += `
                 <button class="btn-action" style="color:var(--orange); border-color:#ffeaa7;" onclick="saveToLibraryDirect(${d.asset_id}, '${defaultQuality}')"><i class="fas fa-box-archive"></i> Lưu kho</button>
                 <button class="btn-action" style="color:var(--accent); border-color:var(--accent-light);" onclick="openPushToPlaylistFlow(${d.asset_id})"><i class="fas fa-folder-plus"></i> Playlist</button>
-                <button class="btn-action ${isFav?'fav-active':''}" onclick="triggerFavoritePlaylistToggle(${d.asset_id}, true)"><i class="fas fa-heart"></i> ${isFav?'Đã thích':'Yêu thích'}</button>
+                <button class="btn-action ${isFav?'fav-active':''}" data-fav-asset="${d.asset_id}" onclick="toggleFavorite(${d.asset_id}, true)"><i class="fas fa-heart"></i> ${isFav?'Đã thích':'Yêu thích'}</button>
             `;
-        } else {
-            actionButtons += `<span style="font-size:11px; color:var(--text-tertiary); margin-left:10px;">(Hãy đăng nhập để Lưu trữ & tạo Playlist)</span>`;
+        } else if (!appToken) {
+            actionButtons += `<span style="font-size:11px; color:var(--text-tertiary); margin-left:10px;">(Hãy đăng nhập để Lưu kho & tạo Playlist)</span>`;
         }
 
         previewBody.innerHTML = `
             <div class="big-thumb-box">
-                <img src="${d.thumbnail || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400'}" alt="Thumb">
+                <img src="${d.thumbnail || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400'}">
                 <span class="big-duration">${min}:${sec}</span>
             </div>
             <div class="big-detail-box">
                 <div>
                     <div class="big-title">${d.title}</div>
                     <div class="big-meta">
-                        <span><i class="fab fa-youtube"></i> Nền tảng: <b>${d.platform.toUpperCase()}</b></span>
-                        <span><i class="fas fa-user-ninja"></i> Kênh: <b>${d.creator || 'N/A'}</b></span>
+                        <span><i class="fab fa-youtube"></i> ${d.platform.toUpperCase()}</span>
+                        <span><i class="fas fa-user-ninja"></i> ${d.creator || 'N/A'}</span>
                     </div>
                 </div>
-                <div class="big-actions-grid">
-                    ${actionButtons}
-                </div>
+                <div class="big-actions-grid">${actionButtons}</div>
             </div>
         `;
     }
 
-    async function saveToLibraryDirect(assetId, formatQuality = '720p') {
-        const quality = formatQuality === 'thumbnail' ? '720p' : formatQuality;
-        try {
-            const r = await fetch(`${CONFIG_API}/downloads`, {
-                method: 'POST', headers: makeHeaders(), 
-                body: JSON.stringify({ asset_id: parseInt(assetId, 10), quality: quality })
-            });
-            const d = await r.json();
-            if(r.ok) {
-                createToast("Đã lưu video này vào kho dữ liệu cá nhân!", "success");
-                loadSavedMedia();
-                loadDownloadHistory();
-            } else { createToast(d.error || "Chưa thể lưu vào kho.", "error"); }
-        } catch(e) { createToast("Lỗi kết nối lưu kho.", "error"); }
-    }
-
-    async function removeFromLibrary(assetId) {
-        if(!confirm("Bạn có chắc chắn muốn xóa video này khỏi kho dữ liệu?")) return;
-        try {
-            const r = await fetch(`${CONFIG_API}/downloads/${assetId}`, { method: 'DELETE', headers: makeHeaders() });
-            if(r.ok) {
-                createToast("Đã dọn dẹp video khỏi kho lưu trữ thành công!", "success");
-                loadSavedMedia();
-            }
-        } catch(e) { createToast("Lỗi xóa thư viện.", "error"); }
-    }
-
-    // MANG NÚT TIM ĐỎ QUAY LẠI TẠI KHO LƯU TRỮ
-    async function loadSavedMedia() {
-        if(!appToken) return;
-        const mediaBox = document.getElementById('mediaContainer');
-        const sBy = document.getElementById('selectSort').value;
-        const oDer = document.getElementById('selectOrder').value;
-
-        let favIds = new Set();
-        if (favoritePlaylistId) {
-            try {
-                const r = await fetch(`${CONFIG_API}/playlists/${favoritePlaylistId}/items`, { headers: makeHeaders() });
-                if (r.ok) {
-                    const items = await r.json();
-                    favIds = new Set(items.map(i => i.asset_id));
-                }
-            } catch(e) {}
-        }
-
-        try {
-            const r = await fetch(`${CONFIG_API}/users/me/downloads_sorted?sort_by=${sBy}&order=${oDer}`, { headers: makeHeaders() });
-            if(!r.ok) return;
-            let list = await r.json();
-            
-            const uniqueMap = new Map();
-            list.forEach(item => { if(!uniqueMap.has(item.asset_id)) uniqueMap.set(item.asset_id, item); });
-            let cleanList = Array.from(uniqueMap.values());
-
-            document.getElementById('assetCount').innerText = `${cleanList.length} mục`;
-            
-            if(!cleanList.length) {
-                mediaBox.innerHTML = `<div style="text-align:center;color:var(--text-tertiary);padding:30px;">Kho mục trống hoặc chưa có video tương ứng.</div>`;
-                return;
-            }
-            
-            mediaBox.innerHTML = cleanList.map(v => {
-                const isFav = favIds.has(v.asset_id);
-                const favClass = isFav ? 'fav-active' : '';
-                return `
-                    <div class="video-item">
-                        <div class="video-thumb">
-                            <img src="${v.thumbnail_url || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=300'}" alt="Thumb">
-                            <span class="duration">${Math.floor(v.duration_seconds/60)}:${(v.duration_seconds%60).toString().padStart(2,'0')}</span>
-                        </div>
-                        <div class="video-info">
-                            <div class="video-title">${v.title}</div>
-                            <div class="video-meta">
-                                <span><i class="fab fa-youtube"></i> Nền tảng: <b>${v.platform}</b></span>
-                                <span><i class="fas fa-calendar-alt"></i> Lưu lúc: <b>${new Date(v.downloaded_at).toLocaleString('vi-VN')}</b></span>
-                            </div>
-                            <div class="video-actions">
-                                <button class="btn-action dl" onclick="openDownloadFlow(${v.asset_id})"><i class="fas fa-download"></i> Tải về máy</button>
-                                <button class="btn-action" style="color:var(--accent);" onclick="openPushToPlaylistFlow(${v.asset_id})"><i class="fas fa-folder-plus"></i> Playlist</button>
-                                <button class="btn-action ${favClass}" onclick="triggerFavoritePlaylistToggle(${v.asset_id}, false)"><i class="fas fa-heart"></i> Yêu thích</button>
-                                <button class="btn-action del" onclick="removeFromLibrary(${v.asset_id})"><i class="fas fa-trash"></i> Xóa</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        } catch(e) { mediaBox.innerHTML = `Lỗi lấy dữ liệu kho lưu trữ.`; }
-    }
-
+    // ==================== DOWNLOAD ====================
     async function openDownloadFlow(assetId) {
         targetAssetId = assetId;
         const select = document.getElementById('qualitySelectNode');
-        select.innerHTML = '<option value="">Đang truy xuất luồng định dạng...</option>';
+        select.innerHTML = '<option value="">Đang truy xuất luồng...</option>';
         openModal('modalSelectQuality');
         
         try {
@@ -504,37 +432,33 @@
             const formats = await r.json();
             
             select.innerHTML = formats.map(f => {
-                let noteText = "";
-                if(f.quality === 'audio') noteText = "Audio (MP3)";
-                else if(f.quality === 'thumbnail') noteText = "Thumbnail (JPG)";
-                else noteText = `Video ${f.quality}`;
+                let noteText = f.quality === 'audio' ? "MP3 Audio" : (f.quality === 'thumbnail' ? "Ảnh Bìa (JPG)" : f.quality);
                 return `<option value="${f.quality}">${noteText}</option>`;
             }).join('');
         } catch(e) { select.innerHTML = '<option value="720p">720p (Mặc định)</option>'; }
     }
 
-    // TÍCH HỢP TẢI DÀNH CHO GUEST (CHƯA ĐĂNG NHẬP)
     async function executeDownload() {
         const q = document.getElementById('qualitySelectNode').value;
-        if(!q) return createToast("Vui lòng chọn định dạng tải hợp lệ!", "error");
+        if(!q) return createToast("Vui lòng chọn định dạng!", "error");
         closeAllModals();
 
-        // Xử lý luồng nếu KHÔNG có Token
+        // NẾU LÀ KHÁCH - Tải trực tiếp bằng endpoint guest
         if (!appToken) {
-            createToast("Đang băm luồng tải khách (Guest)... Trình duyệt sẽ lưu file khi ghép xong.", "success");
+            createToast("Đang tải dữ liệu cho khách. Trình duyệt sẽ mở khi hoàn tất.", "success");
             window.open(`${CONFIG_API}/downloads/guest/file?asset_id=${targetAssetId}&quality=${q}`, '_blank');
             return;
         }
-        
+
+        // NẾU LÀ THÀNH VIÊN - Lưu lịch sử và tiến trình
         try {
             const r = await fetch(`${CONFIG_API}/downloads`, {
-                method: 'POST', headers: makeHeaders(), 
-                body: JSON.stringify({ asset_id: parseInt(targetAssetId, 10), quality: q })
+                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: parseInt(targetAssetId, 10), quality: q })
             });
             const d = await r.json();
-            if (!r.ok) return createToast(d.error || "Lỗi tạo tiến trình tải.", "error");
+            if (!r.ok) return createToast(d.error || "Lỗi tạo tải xuống.", "error");
 
-            createToast("Hệ thống bắt đầu tải luồng và gộp file...", "success");
+            createToast("Hệ thống bắt đầu xử lý đóng gói file...", "success");
             loadDownloadHistory();
             loadSavedMedia();
 
@@ -543,191 +467,436 @@
                     const histR = await fetch(`${CONFIG_API}/users/me/downloads`, { headers: makeHeaders() });
                     if (!histR.ok) return; 
                     const data = await histR.json();
-                    const list = data.history || []; 
-                    
-                    const target = list.find(item => item.id === d.download_id);
+                    const target = (data.history || []).find(item => item.id === d.download_id);
                     if(target && target.download_status !== 'PENDING') {
                         clearInterval(checkTimer);
                         loadDownloadHistory();
                         if(target.download_status === 'SUCCESS') {
-                            createToast("File đã sẵn sàng! Đang nạp xuống máy...", "success");
                             window.open(`${CONFIG_API}/downloads/${d.download_id}/file?token=${appToken}`, '_blank');
-                        } else createToast("Ghép luồng thất bại do lỗi mạng.", "error");
+                        } else createToast("Xử lý luồng tải thất bại.", "error");
                     }
                 } catch(err) {}
             }, 3000);
-        } catch(e) { createToast("Mất kết nối API tải file.", "error"); }
-    }
-
-    async function loadDownloadHistory() {
-        if(!appToken) return;
-        const box = document.getElementById('historyContainer');
-        try {
-            const r = await fetch(`${CONFIG_API}/users/me/downloads`, { headers: makeHeaders() });
-            const data = await r.json();
-            const list = data.history || []; 
-            if(!list.length) { box.innerHTML = `<div style="text-align:center;padding:15px;color:var(--text-tertiary);">Trống</div>`; return; }
-            box.innerHTML = list.map(h => `
-                <div class="list-item" style="padding: 10px 0; cursor: default;">
-                    <div class="item-desc">
-                        <span class="item-title">${h.title}</span>
-                        <span style="font-size:11px;color:var(--text-tertiary);">Định dạng: <b>${h.format_selected.toUpperCase()}</b></span>
-                    </div>
-                    <span class="status-badge ${h.download_status.toLowerCase()}">${h.download_status}</span>
-                </div>
-            `).join('');
         } catch(e) {}
     }
 
+    // ==================== CÁC HÀM THÀNH VIÊN & ADMIN ====================
+    async function loadSavedMedia() {
+        // Khởi tạo nhãn order lần đầu nếu dropdown đang trống
+        const orderSelect = document.getElementById('sortOrderSelect');
+        if (orderSelect && orderSelect.options.length === 0) {
+            orderSelect.innerHTML = `<option value="DESC">Mới nhất</option><option value="ASC">Cũ nhất</option>`;
+        }
+        const sortBy = document.getElementById('sortBySelect')?.value || 'date_saved';
+        const order = document.getElementById('sortOrderSelect')?.value || 'DESC';
+        try {
+            const r = await fetch(`${CONFIG_API}/users/me/downloads_sorted?sort_by=${sortBy}&order=${order}`, { headers: makeHeaders() });
+            if (!r.ok) return;
+            const items = await r.json();
+            const container = document.getElementById('mediaContainer');
+            document.getElementById('assetCount').innerText = `${items.length} mục`;
+            
+            // Hiện sort controls khi có dữ liệu
+            const sortCtrl = document.getElementById('sortControls');
+            if (sortCtrl) sortCtrl.style.display = items.length > 0 ? 'flex' : 'none';
+
+            if (items.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:var(--text-tertiary); padding:40px 0;">Kho trống. Hãy lưu video đầu tiên!</div>';
+                return;
+            }
+            container.innerHTML = items.map(item => {
+                const min = Math.floor((item.duration_seconds || 0) / 60);
+                const sec = ((item.duration_seconds || 0) % 60).toString().padStart(2, '0');
+                const thumb = item.thumbnail_url || 'https://placehold.co/140x85/e2e5ed/8888a8?text=No+Thumb';
+                const isFav = favoriteAssetIds.has(item.asset_id);
+                const views = formatViewCount(item.view_count);
+                const savedDate = item.downloaded_at ? new Date(item.downloaded_at).toLocaleDateString('vi-VN') : '';
+                return `
+                <div class="video-item">
+                    <div class="video-thumb">
+                        <img src="${thumb}" onerror="this.src='https://placehold.co/140x85/e2e5ed/8888a8?text=No+Thumb'">
+                        <span class="duration">${min}:${sec}</span>
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">${item.title || 'Không có tiêu đề'}</div>
+                        <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px; display:flex; gap:10px; flex-wrap:wrap;">
+                            <span>${item.author_name || ''} · ${item.platform || ''}</span>
+                            <span><i class="fas fa-eye"></i> ${views}</span>
+                            <span><i class="fas fa-calendar"></i> Lưu: ${savedDate}</span>
+                        </div>
+                        <div class="video-actions">
+                            <button class="btn-action dl" onclick="openDownloadFlow(${item.asset_id})"><i class="fas fa-download"></i> Tải</button>
+                            <button class="btn-action" style="color:var(--accent); border-color:var(--accent-light);" onclick="openPushToPlaylistFlow(${item.asset_id})"><i class="fas fa-folder-plus"></i> Playlist</button>
+                            <button class="btn-action ${isFav?'fav-active':''}" data-fav-asset="${item.asset_id}" onclick="toggleFavorite(${item.asset_id}, false)"><i class="fas fa-heart"></i> ${isFav?'Đã thích':'Yêu thích'}</button>
+                            <button class="btn-action" style="color:var(--red); border-color:#fecdd3;" onclick="deleteFromLibrary(${item.download_id})"><i class="fas fa-trash"></i> Xóa</button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) { console.error('loadSavedMedia error:', e); }
+    }
+
+    function formatViewCount(n) {
+        n = n || 0;
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+        return n.toString();
+    }
+
+    async function deleteFromLibrary(downloadId) {
+        if (!confirm("Xóa video này khỏi kho lưu trữ?")) return;
+        try {
+            const r = await fetch(`${CONFIG_API}/downloads/${downloadId}`, { method: 'DELETE', headers: makeHeaders() });
+            const d = await r.json();
+            if (r.ok) { createToast("Đã xóa khỏi kho lưu trữ.", "success"); loadSavedMedia(); loadDownloadHistory(); }
+            else createToast(d.error || "Lỗi xóa.", "error");
+        } catch(e) { createToast("Mất kết nối.", "error"); }
+    }
+
+    function onSortCriteriaChange() {
+        const sortBy = document.getElementById('sortBySelect').value;
+        const orderSelect = document.getElementById('sortOrderSelect');
+
+        // Mỗi tiêu chí có nhãn order riêng cho hợp lý ngữ nghĩa
+        const orderLabels = {
+            date_saved: [['DESC', 'Mới nhất'], ['ASC', 'Cũ nhất']],
+            title: [['ASC', 'A → Z'], ['DESC', 'Z → A']],
+            duration: [['DESC', 'Dài nhất'], ['ASC', 'Ngắn nhất']],
+            views: [['DESC', 'Nhiều nhất'], ['ASC', 'Ít nhất']]
+        };
+        const opts = orderLabels[sortBy] || orderLabels.date_saved;
+        orderSelect.innerHTML = opts.map(([val, label]) => `<option value="${val}">${label}</option>`).join('');
+        loadSavedMedia();
+    }
+
+    async function loadDownloadHistory() {
+        try {
+            const r = await fetch(`${CONFIG_API}/users/me/downloads`, { headers: makeHeaders() });
+            if (!r.ok) return;
+            const data = await r.json();
+            const history = data.history || [];
+            const container = document.getElementById('historyContainer');
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:var(--text-tertiary); padding:15px 0;">Chưa có tiến trình tải</div>';
+                return;
+            }
+            container.innerHTML = history.slice(0, 10).map(item => {
+                const statusColor = item.download_status === 'SUCCESS' ? 'var(--green)' : item.download_status === 'PENDING' ? 'var(--orange)' : 'var(--red)';
+                const statusIcon = item.download_status === 'SUCCESS' ? 'fa-check-circle' : item.download_status === 'PENDING' ? 'fa-spinner fa-spin' : 'fa-times-circle';
+                return `
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:13px;">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
+                        <div style="font-size:11px; color:var(--text-tertiary);">${item.format_selected} · ${new Date(item.downloaded_at).toLocaleString('vi-VN')}</div>
+                    </div>
+                    <span style="color:${statusColor}; margin-left:12px; flex-shrink:0;"><i class="fas ${statusIcon}"></i> ${item.download_status}</span>
+                </div>`;
+            }).join('');
+        } catch(e) { console.error('loadDownloadHistory error:', e); }
+    }
+
+    async function loadPlaylists() {
+        try {
+            const r = await fetch(`${CONFIG_API}/users/me/playlists`, { headers: makeHeaders() });
+            if (!r.ok) return;
+            const playlists = await r.json();
+            const container = document.getElementById('playlistContainer');
+
+            // Cập nhật select box trong modal "Thêm vào Playlist"
+            const selectBox = document.getElementById('playlistSelectBox');
+            if (selectBox) {
+                selectBox.innerHTML = playlists.map(pl => `<option value="${pl.id}">${pl.name}</option>`).join('');
+            }
+
+            if (playlists.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:var(--text-tertiary); padding:20px 0;">Chưa có playlist nào</div>';
+                return;
+            }
+            container.innerHTML = playlists.map(pl => {
+                const isFav = pl.name === 'Favorite';
+                const icon = isFav ? 'fa-heart' : 'fa-folder';
+                const iconColor = isFav ? 'var(--red)' : 'var(--orange)';
+                return `
+                <div class="list-item" onclick="viewPlaylist(${pl.id}, '${pl.name.replace(/'/g, "\\'")}')">
+                    <span><i class="fas ${icon}" style="color:${iconColor}; margin-right:8px;"></i>${pl.name}</span>
+                    <i class="fas fa-chevron-right" style="color:var(--text-tertiary); font-size:11px;"></i>
+                </div>`;
+            }).join('');
+        } catch(e) { console.error('loadPlaylists error:', e); }
+    }
+
+    async function loadFavorites() {
+        try {
+            const r = await fetch(`${CONFIG_API}/users/me/favorites`, { headers: makeHeaders() });
+            if (r.ok) {
+                const items = await r.json();
+                favoriteAssetIds = new Set(items.map(item => item.asset_id));
+            }
+        } catch(e) { console.error('loadFavorites error:', e); }
+    }
+
+    async function viewPlaylist(playlistId, playlistName) {
+        // Highlight active playlist
+        document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active-view'));
+        event.currentTarget?.classList.add('active-view');
+
+        currentPlaylistViewId = playlistId;
+        const viewer = document.getElementById('playlistExpandedViewer');
+        const headerTitle = document.getElementById('expandedHeaderTitle');
+        const content = document.getElementById('playlistItemsContent');
+        viewer.style.display = 'block';
+        headerTitle.innerHTML = `<span><i class="fas fa-folder-open"></i> ${playlistName}</span>`;
+        content.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading"></div></div>';
+
+        try {
+            const r = await fetch(`${CONFIG_API}/playlists/${playlistId}/items`, { headers: makeHeaders() });
+            if (!r.ok) { content.innerHTML = '<div style="color:var(--red); padding:10px;">Lỗi tải nội dung playlist.</div>'; return; }
+            const items = await r.json();
+
+            if (items.length === 0) {
+                content.innerHTML = '<div style="text-align:center; color:var(--text-tertiary); padding:20px;">Playlist này trống.</div>';
+                return;
+            }
+            content.innerHTML = items.map(item => {
+                const min = Math.floor((item.duration_seconds || 0) / 60);
+                const sec = ((item.duration_seconds || 0) % 60).toString().padStart(2, '0');
+                const thumb = item.thumbnail_url || 'https://placehold.co/80x50/e2e5ed/8888a8?text=No+Thumb';
+                return `
+                <div style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-color);">
+                    <img src="${thumb}" style="width:80px; height:50px; object-fit:cover; border-radius:6px; flex-shrink:0;" onerror="this.src='https://placehold.co/80x50/e2e5ed/8888a8?text=No+Thumb'">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
+                        <div style="font-size:11px; color:var(--text-tertiary);">${min}:${sec}</div>
+                    </div>
+                    <button class="btn-action dl" onclick="openDownloadFlow(${item.asset_id})" style="flex-shrink:0;"><i class="fas fa-download"></i></button>
+                    <button class="btn-action" style="color:var(--red); border-color:#fecdd3; flex-shrink:0;" onclick="removeFromPlaylist(${playlistId}, ${item.asset_id})"><i class="fas fa-trash"></i></button>
+                </div>`;
+            }).join('');
+        } catch(e) { content.innerHTML = '<div style="color:var(--red); padding:10px;">Mất kết nối.</div>'; }
+    }
+
+    async function removeFromPlaylist(playlistId, assetId) {
+        if (!confirm("Xóa video này khỏi playlist?")) return;
+        try {
+            const r = await fetch(`${CONFIG_API}/playlists/${playlistId}/items/${assetId}`, { method: 'DELETE', headers: makeHeaders() });
+            const d = await r.json();
+            if (r.ok) {
+                createToast("Đã xóa khỏi playlist.", "success");
+                // Tải lại nội dung playlist hiện tại
+                const items = await fetchPlaylistItems(playlistId);
+                renderPlaylistItemsList(playlistId, items);
+            } else createToast(d.error || "Lỗi xóa.", "error");
+        } catch(e) { createToast("Mất kết nối.", "error"); }
+    }
+
+    async function fetchPlaylistItems(playlistId) {
+        try {
+            const r = await fetch(`${CONFIG_API}/playlists/${playlistId}/items`, { headers: makeHeaders() });
+            return r.ok ? await r.json() : [];
+        } catch(e) { return []; }
+    }
+
+    function renderPlaylistItemsList(playlistId, items) {
+        const content = document.getElementById('playlistItemsContent');
+        if (items.length === 0) {
+            content.innerHTML = '<div style="text-align:center; color:var(--text-tertiary); padding:20px;">Playlist này trống.</div>';
+            return;
+        }
+        content.innerHTML = items.map(item => {
+            const min = Math.floor((item.duration_seconds || 0) / 60);
+            const sec = ((item.duration_seconds || 0) % 60).toString().padStart(2, '0');
+            const thumb = item.thumbnail_url || 'https://placehold.co/80x50/e2e5ed/8888a8?text=No+Thumb';
+            return `
+            <div style="display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-color);">
+                <img src="${thumb}" style="width:80px; height:50px; object-fit:cover; border-radius:6px; flex-shrink:0;" onerror="this.src='https://placehold.co/80x50/e2e5ed/8888a8?text=No+Thumb'">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.title}</div>
+                    <div style="font-size:11px; color:var(--text-tertiary);">${min}:${sec}</div>
+                </div>
+                <button class="btn-action dl" onclick="openDownloadFlow(${item.asset_id})" style="flex-shrink:0;"><i class="fas fa-download"></i></button>
+                <button class="btn-action" style="color:var(--red); border-color:#fecdd3; flex-shrink:0;" onclick="removeFromPlaylist(${playlistId}, ${item.asset_id})"><i class="fas fa-trash"></i></button>
+            </div>`;
+        }).join('');
+    }
+
+    async function openPushToPlaylistFlow(assetId) {
+        if (!appToken) return createToast("Vui lòng đăng nhập!", "error");
+        targetAssetId = assetId;
+        // Refresh danh sách playlist trước khi mở modal
+        await loadPlaylists();
+        openModal('modalPushToPlaylist');
+    }
+
+    async function confirmPushToPlaylist() {
+        const playlistId = document.getElementById('playlistSelectBox').value;
+        if (!playlistId || !targetAssetId) return createToast("Chưa chọn playlist!", "error");
+        try {
+            const r = await fetch(`${CONFIG_API}/playlists/${playlistId}/items`, {
+                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: parseInt(targetAssetId) })
+            });
+            const d = await r.json();
+            if (r.ok) {
+                createToast(d.action === 'added' ? "Đã thêm vào playlist!" : "Đã xóa khỏi playlist!", "success");
+                closeAllModals();
+            } else createToast(d.error || "Lỗi thêm vào playlist.", "error");
+        } catch(e) { createToast("Mất kết nối.", "error"); }
+    }
+
+    async function saveToLibraryDirect(assetId, quality) {
+        if (!appToken) return createToast("Vui lòng đăng nhập!", "error");
+        try {
+            const r = await fetch(`${CONFIG_API}/downloads`, {
+                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: parseInt(assetId), quality })
+            });
+            const d = await r.json();
+            if (r.ok) { createToast("Đã lưu vào kho!", "success"); loadSavedMedia(); loadDownloadHistory(); }
+            else createToast(d.error || "Lỗi lưu kho.", "error");
+        } catch(e) { createToast("Mất kết nối.", "error"); }
+    }
+
+    async function toggleFavorite(assetId, fromPreview) {
+        if (!appToken) return createToast("Vui lòng đăng nhập!", "error");
+        try {
+            const r = await fetch(`${CONFIG_API}/favorites/toggle`, {
+                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: parseInt(assetId) })
+            });
+            const d = await r.json();
+            if (r.ok) {
+                if (d.action === 'added') favoriteAssetIds.add(parseInt(assetId));
+                else favoriteAssetIds.delete(parseInt(assetId));
+
+                createToast(d.action === 'added' ? "Đã thêm vào Yêu thích!" : "Đã bỏ Yêu thích!", "success");
+
+                // Đồng bộ cả 2 vùng: preview card + kho lưu trữ, dùng chung favoriteAssetIds
+                if (activePreviewData && activePreviewData.asset_id === parseInt(assetId)) {
+                    await renderBigPreviewCard();
+                }
+                updateFavoriteButtonsInDOM();
+            } else createToast(d.error || "Lỗi cập nhật yêu thích.", "error");
+        } catch(e) { createToast("Mất kết nối.", "error"); }
+    }
+
+    function updateFavoriteButtonsInDOM() {
+        document.querySelectorAll('[data-fav-asset]').forEach(btn => {
+            const assetId = parseInt(btn.dataset.favAsset);
+            const isFav = favoriteAssetIds.has(assetId);
+            btn.classList.toggle('fav-active', isFav);
+            btn.innerHTML = `<i class="fas fa-heart"></i> ${isFav ? 'Đã thích' : 'Yêu thích'}`;
+        });
+    }
+
+    // HÀM ADMIN
+    async function loadAdminDashboard() {
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/dashboard`, { headers: makeHeaders() });
+            if(r.ok) {
+                const data = await r.json();
+                document.getElementById('adUsers').innerText = data.total_users;
+                document.getElementById('adAssets').innerText = data.total_assets;
+                document.getElementById('adDls').innerText = data.total_downloads;
+            }
+            loadAdminUsersTable();
+        } catch(e) {}
+    }
+    
+    async function loadAdminUsersTable() {
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/users`, { headers: makeHeaders() });
+            const d = await r.json();
+            const tbody = document.getElementById('adminUserTableBody');
+            
+            if(!d.users || d.users.length === 0) return tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Trống.</td></tr>';
+
+            tbody.innerHTML = d.users.map(u => {
+                const isMe = (u.id === currentUserData.id);
+                const roleBadge = u.role === 'admin' ? '<span class="badge admin">Quản trị viên</span>' : '<span class="badge member">Thành viên</span>';
+                const statusBadge = u.is_active ? '<span class="badge member">Hoạt động</span>' : '<span class="badge locked">Bị Khóa</span>';
+                
+                let actionHtml = '';
+                if(!isMe) {
+                    actionHtml = `
+                        <button class="admin-action-btn" onclick="updateUser(${u.id}, ${u.is_active ? 0 : 1}, '${u.role}')">${u.is_active ? 'Khóa TK' : 'Mở Khóa'}</button>
+                        <button class="admin-action-btn" onclick="updateUser(${u.id}, ${u.is_active}, '${u.role === 'admin' ? 'member' : 'admin'}')">${u.role === 'admin' ? 'Hạ cấp' : 'Nâng cấp'}</button>
+                        <button class="admin-action-btn btn-text-red" onclick="deleteUser(${u.id}, '${u.username}')"><i class="fas fa-trash"></i></button>
+                    `;
+                } else actionHtml = '<span style="color:var(--text-tertiary); font-size:11px;">(Bạn)</span>';
+
+                return `<tr><td><b>#${u.id}</b></td><td><div style="font-weight:600;">${u.username}</div><div style="font-size:11px; color:var(--text-tertiary);">${u.email||''}</div></td><td>${roleBadge}</td><td>${statusBadge}</td><td style="font-size:11px;">${new Date(u.created_at).toLocaleDateString('vi-VN')}</td><td>${actionHtml}</td></tr>`;
+            }).join('');
+        } catch(e) {}
+    }
+
+    async function updateUser(targetId, newIsActive, newRole) {
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/users/${targetId}`, { method: 'PUT', headers: makeHeaders(), body: JSON.stringify({ is_active: newIsActive, role: newRole }) });
+            if(r.ok) { createToast("Cập nhật thành công!", "success"); loadAdminUsersTable(); }
+        } catch(e) {}
+    }
+
+    async function deleteUser(targetId, username) {
+        if(!confirm(`Xóa vĩnh viễn tài khoản '${username}'?`)) return;
+        try {
+            const r = await fetch(`${CONFIG_API}/admin/users/${targetId}`, { method: 'DELETE', headers: makeHeaders() });
+            if(r.ok) { createToast(`Đã xóa ${username}!`, "success"); loadAdminDashboard(); }
+        } catch(e) {}
+    }
+
+   async function verifySession() {
+        if (!appToken) return;
+        try {
+            const r = await fetch(`${CONFIG_API}/users/me`, { headers: makeHeaders() });
+            if(r.ok) {
+                currentUserData = await r.json();
+                document.getElementById('btnOpenLogin').style.display = 'none';
+                document.getElementById('btnOpenRegister').style.display = 'none';
+                
+                const av = document.getElementById('userAvatar');
+                av.style.display = 'flex'; 
+                av.innerText = currentUserData.username.charAt(0).toUpperCase();
+
+                // ĐIỀN DỮ LIỆU VÀO MODAL HỒ SƠ
+                document.getElementById('profName').innerText = currentUserData.username;
+                document.getElementById('profEmail').innerText = currentUserData.email || 'N/A';
+                document.getElementById('profRole').innerText = currentUserData.role.toUpperCase();
+
+                // ĐIỀU HƯỚNG GIAO DIỆN
+                if (currentUserData.role === 'admin') {
+                    document.getElementById('mainWorkspace').style.display = 'none';
+                    document.getElementById('adminDashboard').style.display = 'block';
+                    await loadAdminDashboard();
+                } else {
+                    document.getElementById('btnCreatePl').style.display = 'inline-flex';
+                    
+                    // LƯU Ý: Phải có chữ "await" ở đây thì hệ thống mới nạp xong danh sách yêu thích!
+                    await loadFavorites(); 
+                    await loadSavedMedia();
+                    await loadPlaylists();
+                    await loadDownloadHistory();
+                }
+            } else {
+                appToken = null; localStorage.removeItem('df_auth_token');
+            }
+        } catch(e) {}
+    }
     async function createPlaylist() {
         const name = document.getElementById('plName').value.trim();
         if(!name) return;
         try {
-            const r = await fetch(`${CONFIG_API}/playlists`, { method: 'POST', headers: makeHeaders(), body: JSON.stringify({ name, is_public: false }) });
-            if(r.ok) { createToast("Đã tạo thêm playlist mới thành công!", "success"); closeAllModals(); loadPlaylists(); }
-        } catch(e) {}
-    }
-
-    async function loadPlaylists() {
-        if(!appToken) return;
-        const box = document.getElementById('playlistContainer');
-        try {
-            const r = await fetch(`${CONFIG_API}/users/me/playlists`, { headers: makeHeaders() });
-            const list = await r.json();
-            
-            let cleanList = list.filter(p => p.name !== 'Favorite');
-            
-            let htmlStr = `
-                <div class="list-item" id="nodeFavPlaylist" onclick="viewPlaylistItemsDetails(${favoritePlaylistId}, 'Thư mục Yêu thích')">
-                    <div class="item-desc">
-                        <i class="fas fa-heart" style="color:var(--red); font-size:16px;"></i>
-                        <span class="item-title" style="font-weight:700; color:var(--red);">Yêu thích</span>
-                    </div>
-                    <button class="btn-action" style="padding:2px 8px; font-size:11px;"><i class="fas fa-chevron-right"></i> Xem mục</button>
-                </div>
-            `;
-
-            htmlStr += cleanList.map(p => `
-                <div class="list-item" id="nodePlaylist-${p.id}" onclick="viewPlaylistItemsDetails(${p.id}, '${p.name}')">
-                    <div class="item-desc">
-                        <i class="fas fa-folder" style="color:var(--orange); font-size:16px;"></i>
-                        <span class="item-title" style="font-weight:600;">${p.name}</span>
-                    </div>
-                    <button class="btn-action" style="padding:2px 8px; font-size:11px;"><i class="fas fa-chevron-right"></i> Xem mục</button>
-                </div>
-            `).join('');
-            
-            box.innerHTML = htmlStr;
-        } catch(e) {}
-    }
-
-    async function viewPlaylistItemsDetails(playlistId, playlistName) {
-        const grid = document.getElementById('workspaceGrid');
-        const expandedViewer = document.getElementById('playlistExpandedViewer');
-        const contentBox = document.getElementById('playlistItemsContent');
-        const headerTitle = document.getElementById('expandedHeaderTitle');
-        
-        document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active-view'));
-        if(playlistName.includes('Yêu thích')) {
-            const favNode = document.getElementById('nodeFavPlaylist');
-            if(favNode) favNode.classList.add('active-view');
-        } else {
-            const node = document.getElementById(`nodePlaylist-${playlistId}`);
-            if(node) node.classList.add('active-view');
-        }
-
-        grid.classList.add('grid-expand');
-        expandedViewer.style.display = 'block';
-        headerTitle.innerHTML = `<span><i class="fas fa-folder-open"></i> ${playlistName}</span> <i class="fas fa-times" style="cursor:pointer;" onclick="closeExpandedViewer()"></i>`;
-        contentBox.innerHTML = '<div style="text-align:center;padding:20px;"><div class="loading"></div> Đang quét tệp...</div>';
-        
-        try {
-            const r = await fetch(`${CONFIG_API}/playlists/${playlistId}/items`, { headers: makeHeaders() });
-            if(!r.ok) { contentBox.innerHTML = 'Lỗi không đọc được dữ liệu phân hệ này.'; return; }
-            const items = await r.json();
-            
-            if(!items.length) {
-                contentBox.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-tertiary); font-size:13px;"><i class="fas fa-folder-open"></i> Thư mục trống.</div>';
-                return;
-            }
-            
-            contentBox.innerHTML = items.map(item => `
-                <div class="video-item" style="padding: 10px 0;">
-                    <div class="video-thumb" style="width: 110px; height: 65px;">
-                        <img src="${item.thumbnail_url || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=150'}">
-                        <span class="duration" style="font-size:10px;">${Math.floor(item.duration_seconds/60)}:${(item.duration_seconds%60).toString().padStart(2,'0')}</span>
-                    </div>
-                    <div class="video-info" style="gap:2px;">
-                        <div class="video-title" style="font-size:12px; font-weight:700; line-height:1.3;">${item.title}</div>
-                        <div class="video-actions" style="margin-top:2px;">
-                            <button class="btn-action dl" style="padding: 2px 10px; font-size: 10px;" onclick="openDownloadFlow(${item.asset_id})"><i class="fas fa-download"></i> Tải ngay</button>
-                            <button class="btn-action del" style="padding: 2px 10px; font-size: 10px;" onclick="removePlaylistItem(${playlistId}, ${item.asset_id}, '${playlistName}')"><i class="fas fa-times"></i> Xóa khỏi mục</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        } catch(e) { contentBox.innerHTML = 'Lỗi kết nối cơ sở dữ liệu.'; }
-    }
-
-    async function removePlaylistItem(playlistId, assetId, playlistName) {
-        try {
-            const r = await fetch(`${CONFIG_API}/playlists/${playlistId}/items`, {
-                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: assetId })
+            const r = await fetch(`${CONFIG_API}/playlists`, {
+                method: 'POST', headers: makeHeaders(),
+                body: JSON.stringify({ name, is_public: false })
             });
-            if(r.ok) {
-                createToast("Đã loại bỏ video ra khỏi danh sách phát.", "success");
-                viewPlaylistItemsDetails(playlistId, playlistName); 
+            const d = await r.json(); // Đọc lỗi từ API trả về
+            if(r.ok) { 
+                createToast("Đã tạo thêm playlist mới thành công!", "success"); 
+                closeAllModals(); 
+                loadPlaylists(); 
+            } else {
+                // Nếu bị lỗi, hiển thị lỗi lên màn hình thay vì im lặng
+                createToast(d.error || "Không thể tạo Playlist.", "error");
             }
-        } catch(e) {}
-    }
-
-    function closeExpandedViewer() {
-        document.getElementById('workspaceGrid').classList.remove('grid-expand');
-        document.getElementById('playlistExpandedViewer').style.display = 'none';
-        document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active-view'));
-    }
-
-    async function openPushToPlaylistFlow(assetId) {
-        targetAssetId = assetId;
-        const box = document.getElementById('playlistSelectBox');
-        box.innerHTML = '<option value="">Đang đọc danh sách playlist...</option>';
-        openModal('modalPushToPlaylist');
-        try {
-            const r = await fetch(`${CONFIG_API}/users/me/playlists`, { headers: makeHeaders() });
-            const list = await r.json();
-            const cleanPlaylists = list.filter(p => p.name !== 'Favorite');
-            if(!cleanPlaylists.length) { box.innerHTML = '<option value="">(Bạn chưa tạo playlist cá nhân nào)</option>'; return; }
-            box.innerHTML = cleanPlaylists.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        } catch(e) {}
-    }
-
-    async function confirmPushToPlaylist() {
-        const plId = document.getElementById('playlistSelectBox').value;
-        if(!plId) return closeAllModals();
-        try {
-            const r = await fetch(`${CONFIG_API}/playlists/${plId}/items`, {
-                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: targetAssetId })
-            });
-            if(r.ok) createToast("Đã chuyển video này vào danh sách phát thành công!", "success");
-            closeAllModals();
-            loadPlaylists();
-        } catch(e) { closeAllModals(); }
-    }
-
-    async function triggerFavoritePlaylistToggle(assetId, isFromPreview = false) {
-        if (!favoritePlaylistId) return createToast("Hệ thống xác thực playlist thích lỗi.", "error");
-        try {
-            const r = await fetch(`${CONFIG_API}/playlists/${favoritePlaylistId}/items`, {
-                method: 'POST', headers: makeHeaders(), body: JSON.stringify({ asset_id: assetId })
-            });
-            const d = await r.json();
-            if(r.ok) {
-                if (d.action === 'removed') createToast("Đã loại bỏ khỏi thư mục Yêu thích.", "success");
-                else createToast("Đã thêm vào mục Yêu thích thành công!", "success");
-            }
-            await loadSavedMedia();
-            if (isFromPreview) { await renderBigPreviewCard(); }
-        } catch(e) {}
+        } catch(e) { createToast("Mất kết nối mạng.", "error"); }
     }
 
     async function initAppSession(name) {
@@ -735,25 +904,15 @@
         document.getElementById('btnOpenRegister').style.display = 'none';
         document.getElementById('btnLogout').style.display = 'inline-flex';
         const av = document.getElementById('userAvatar');
-        av.style.display = 'flex'; av.innerText = name.charAt(0).toUpperCase();
+        av.style.display = 'flex'; 
+        av.innerText = name.charAt(0).toUpperCase();
         
-        await ensureFavoritePlaylistSetup(); 
+        // ĐẢM BẢO GỌI ĐỦ CÁC HÀM NÀY
+        await loadFavorites(); 
         await loadSavedMedia();
         await loadPlaylists();
         await loadDownloadHistory();
     }
-
-    document.addEventListener("DOMContentLoaded", async () => {
-        if (appToken) {
-            try {
-                const r = await fetch(`${CONFIG_API}/users/me`, { headers: makeHeaders() });
-                if(r.ok) {
-                    const u = await r.json();
-                    await initAppSession(u.username);
-                } else logout();
-            } catch(e) { logout(); }
-        }
-    });
 </script>
 </body>
 </html>

@@ -5,9 +5,6 @@ import subprocess
 import logging
 
 logger = logging.getLogger(__name__)
-
-# ĐÃ SỬA: Sử dụng thư mục Temp của Hệ điều hành (Windows Temp)
-# Tránh lưu vào thư mục code làm Live Server tự động F5/reload trang!
 TEMP_DIR = tempfile.gettempdir()
 
 def merge_video_audio(video_url: str, audio_url: str) -> str:
@@ -19,10 +16,10 @@ def merge_video_audio(video_url: str, audio_url: str) -> str:
         subprocess.run([
             "./ffmpeg.exe",
             "-y",
-            "-i", video_url,     # Link stream Video
-            "-i", audio_url,     # Link stream Audio
-            "-c:v", "copy",      # Giữ nguyên chất lượng hình
-            "-c:a", "aac",       # Chuẩn hóa âm thanh sang AAC
+            "-i", video_url,
+            "-i", audio_url,
+            "-c:v", "copy",
+            "-c:a", "aac",
             "-movflags", "+faststart",
             output_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -30,7 +27,6 @@ def merge_video_audio(video_url: str, audio_url: str) -> str:
         return output_path
         
     except FileNotFoundError:
-        # Bắt chính xác lỗi [WinError 2]
         raise RuntimeError("LỖI HỆ THỐNG: Máy tính chưa cài đặt FFmpeg. Vui lòng cài FFmpeg để ghép file!")
     except subprocess.CalledProcessError as e:
         if os.path.exists(output_path):

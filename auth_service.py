@@ -17,7 +17,7 @@ import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from database_setup import get_connection
 
-_LEGACY_SALT = "directflow_salt_2024"
+_LEGACY_SALT = os.getenv('LEGACY_HASH_SALT', 'directflow_salt_2024')
 
 
 def _hash_password(password: str) -> str:

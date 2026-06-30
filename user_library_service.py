@@ -1,11 +1,12 @@
 """
 user_library_service.py
 -----------------------
-Dịch vụ lõi xử lý các tính năng thư viện cá nhân và quản trị hệ thống:
-  - Thêm / Xóa video yêu thích (Favorites)
-  - Tạo cấu trúc danh sách phát (Playlists)
-  - Sắp xếp và trích xuất dữ liệu dựa trên Metadata cào từ URL
-  - Các hàm bổ trợ cho Admin quản lý User công khai
+Dịch vụ lõi xử lý toàn bộ tính năng thư viện cá nhân của người dùng:
+  - Yêu thích (Favorites) — dùng bảng `favorites` riêng (composite key user_id + asset_id)
+  - Danh sách phát (Playlists) — tạo / xóa / thêm video / xem nội dung (chỉ riêng tư, không hỗ trợ public)
+  - Kho lưu trữ cá nhân (Saved Media) — truy xuất + sắp xếp theo metadata
+
+Toàn bộ dữ liệu đọc/viết đều đi qua đây để tránh trùng lặp logic SQL ở app.py.
 """
 
 import sqlite3
@@ -16,12 +17,12 @@ from database_setup import get_connection
 # ================================================================
 
 def add_to_favorites(user_id: int, asset_id: int) -> dict:
-    """Thêm một video vào danh sách yêu thích của người dùng"""
+    """Thêm một video vào danh sách yêu thích của người dùng."""
     try:
         with get_connection() as conn:
             conn.execute(
                 "INSERT INTO favorites (user_id, asset_id) VALUES (?, ?)",
-                (user_id, asset_id)
+                (int(user_id), int(asset_id))
             )
             conn.commit()
         return {"success": True, "message": "Đã thêm vào danh sách yêu thích"}
@@ -30,12 +31,13 @@ def add_to_favorites(user_id: int, asset_id: int) -> dict:
     except Exception as e:
         return {"success": False, "message": f"Lỗi hệ thống: {e}"}
 
+
 def remove_from_favorites(user_id: int, asset_id: int) -> dict:
-    """Xóa video khỏi danh sách yêu thích"""
+    """Xóa video khỏi danh sách yêu thích."""
     with get_connection() as conn:
         res = conn.execute(
             "DELETE FROM favorites WHERE user_id = ? AND asset_id = ?",
-            (user_id, asset_id)
+            (int(user_id), int(asset_id))
         )
         conn.commit()
         if res.rowcount > 0:
@@ -43,46 +45,182 @@ def remove_from_favorites(user_id: int, asset_id: int) -> dict:
         return {"success": False, "message": "Video chưa từng tồn tại trong danh sách yêu thích"}
 
 
+def toggle_favorite(user_id: int, asset_id: int) -> dict:
+    """Bật/tắt yêu thích trong 1 lệnh gọi — tiện cho nút toggle trên UI."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM favorites WHERE user_id = ? AND asset_id = ?",
+            (int(user_id), int(asset_id))
+        )
+        if cursor.fetchone():
+            conn.execute(
+                "DELETE FROM favorites WHERE user_id = ? AND asset_id = ?",
+                (int(user_id), int(asset_id))
+            )
+            conn.commit()
+            return {"success": True, "action": "removed", "message": "Đã bỏ yêu thích"}
+
+        conn.execute(
+            "INSERT INTO favorites (user_id, asset_id) VALUES (?, ?)",
+            (int(user_id), int(asset_id))
+        )
+        conn.commit()
+        return {"success": True, "action": "added", "message": "Đã thêm vào yêu thích"}
+
+
+def get_user_favorites(user_id: int) -> list:
+    """Lấy danh sách video yêu thích kèm metadata + thumbnail để render UI."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+                ma.id AS asset_id, ma.title, ma.platform, ma.source_url,
+                ma.duration_seconds, ma.view_count, f.added_at,
+                MAX(mc.thumbnail_url) AS thumbnail_url
+            FROM favorites f
+            JOIN media_assets ma ON f.asset_id = ma.id
+            LEFT JOIN media_cache mc ON ma.id = mc.asset_id
+            WHERE f.user_id = ?
+            GROUP BY ma.id
+            ORDER BY f.added_at DESC
+        ''', (int(user_id),))
+        return [dict(r) for r in cursor.fetchall()]
+
+
+def is_favorite(user_id: int, asset_id: int) -> bool:
+    """Kiểm tra nhanh 1 asset có đang được yêu thích hay không."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM favorites WHERE user_id = ? AND asset_id = ?",
+            (int(user_id), int(asset_id))
+        )
+        return cursor.fetchone() is not None
+
+
 # ================================================================
-# 2. CHỨC NĂNG DANH SÁCH PHÁT (PLAYLISTS)
+# 2. CHỨC NĂNG DANH SÁCH PHÁT (PLAYLISTS) — CHỈ RIÊNG TƯ
 # ================================================================
 
-def create_playlist(user_id: int, name: str, is_public: int = 0) -> dict:
-    """Tạo một playlist mới phân tách quyền riêng tư"""
+def _is_owner(playlist_id: int, user_id: int) -> bool:
+    """Kiểm tra quyền sở hữu playlist (bảo mật)."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM playlists WHERE id = ? AND user_id = ?",
+            (int(playlist_id), int(user_id))
+        )
+        return cursor.fetchone() is not None
+
+
+def create_playlist(user_id: int, name: str) -> dict:
+    """Tạo playlist mới cho người dùng. Playlist luôn riêng tư (is_public = 0)."""
+    clean_user_id = int(user_id)
+    name = (name or "").strip()
+    if not name:
+        return {"success": False, "message": "Tên playlist không được để trống."}
+    if len(name) > 100:
+        return {"success": False, "message": "Tên playlist tối đa 100 ký tự."}
+
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO playlists (user_id, name, is_public) VALUES (?, ?, ?)",
-                (user_id, name, is_public)
+                "INSERT INTO playlists (user_id, name, is_public) VALUES (?, ?, 0)",
+                (clean_user_id, name)
             )
             conn.commit()
-            return {"success": True, "playlist_id": cursor.lastrowid, "message": "Tạo playlist thành công"}
-    except Exception as e:
-        return {"success": False, "message": f"Không thể tạo danh sách phát: {e}"}
-
-def add_to_playlist(playlist_id: int, asset_id: int) -> dict:
-    """Thêm video vào một playlist cụ thể"""
-    try:
-        with get_connection() as conn:
-            conn.execute(
-                "INSERT INTO playlist_items (playlist_id, asset_id) VALUES (?, ?)",
-                (playlist_id, asset_id)
-            )
-            conn.commit()
-        return {"success": True, "message": "Đã thêm vào danh sách phát"}
-    except sqlite3.IntegrityError:
-        return {"success": False, "message": "Video này đã có sẵn trong danh sách phát này"}
+            return {"success": True, "playlist_id": cursor.lastrowid, "message": "Tạo playlist thành công."}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
 
+def delete_playlist(playlist_id: int, user_id: int) -> dict:
+    """Xóa hoàn toàn playlist (tự động xóa các mục bên trong nhờ CASCADE)."""
+    clean_user_id = int(user_id)
+    if not _is_owner(playlist_id, clean_user_id):
+        return {"success": False, "message": "Bạn không có quyền quản lý playlist này."}
+
+    with get_connection() as conn:
+        conn.execute("DELETE FROM playlists WHERE id = ?", (int(playlist_id),))
+        conn.commit()
+    return {"success": True, "message": "Đã xóa playlist."}
+
+
+def add_to_playlist(playlist_id: int, asset_id: int, user_id: int) -> dict:
+    """Đẩy/Rút video khỏi playlist (toggle), chỉ khi đúng chủ sở hữu."""
+    clean_user_id = int(user_id)
+    if not _is_owner(playlist_id, clean_user_id):
+        return {"success": False, "message": "Bạn không có quyền chỉnh sửa playlist này."}
+
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT asset_id FROM playlist_items WHERE playlist_id = ? AND asset_id = ?",
+                (int(playlist_id), int(asset_id))
+            )
+            if cursor.fetchone():
+                conn.execute(
+                    "DELETE FROM playlist_items WHERE playlist_id = ? AND asset_id = ?",
+                    (int(playlist_id), int(asset_id))
+                )
+                conn.commit()
+                return {"success": True, "action": "removed", "message": "Đã xóa khỏi danh sách phát."}
+
+            conn.execute(
+                "INSERT INTO playlist_items (playlist_id, asset_id) VALUES (?, ?)",
+                (int(playlist_id), int(asset_id))
+            )
+            conn.commit()
+            return {"success": True, "action": "added", "message": "Đã thêm vào danh sách phát."}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def get_user_playlists(user_id: int) -> list:
+    """Lấy toàn bộ danh mục playlist cá nhân để render lên UI."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, name, created_at
+            FROM playlists
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        ''', (int(user_id),))
+        return [dict(r) for r in cursor.fetchall()]
+
+
+def get_playlist_contents(playlist_id: int, user_id: int) -> dict:
+    """Lấy danh sách chi tiết các video nằm bên trong một playlist cụ thể."""
+    if not _is_owner(playlist_id, user_id):
+        return {"success": False, "message": "Bạn không có quyền xem nội dung danh sách phát này."}
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+                ma.id AS asset_id, ma.title, ma.platform, ma.source_url,
+                ma.duration_seconds, ma.view_count,
+                MAX(mc.thumbnail_url) AS thumbnail_url
+            FROM playlist_items pi
+            JOIN media_assets ma ON pi.asset_id = ma.id
+            LEFT JOIN media_cache mc ON ma.id = mc.asset_id
+            WHERE pi.playlist_id = ?
+            GROUP BY ma.id
+        ''', (int(playlist_id),))
+        rows = [dict(r) for r in cursor.fetchall()]
+
+    return {"success": True, "items": rows}
+
+
 # ================================================================
-# 3. TRUY XUẤT + SẮP XẾP DANH SÁCH THEO METADATA (ĐÃ SỬA LỖI THUMBNAIL)
+# 3. TRUY XUẤT + SẮP XẾP KHO LƯU TRỮ CÁ NHÂN THEO METADATA
 # ================================================================
 
 def get_user_saved_media(user_id: int, sort_by: str = "date_saved", order: str = "DESC") -> list:
-    """Lấy danh sách các video đã lưu, hỗ trợ lấy kèm thumbnail_url để hiển thị lên UI."""
+    """Lấy danh sách các video đã lưu (đã tải), hỗ trợ sắp xếp + kèm thumbnail."""
     clean_user_id = int(user_id)
     allowed_sort_fields = {
         "date_saved": "ud.downloaded_at",
@@ -90,13 +228,12 @@ def get_user_saved_media(user_id: int, sort_by: str = "date_saved", order: str =
         "duration": "ma.duration_seconds",
         "title": "ma.title"
     }
-    
+
     sort_column = allowed_sort_fields.get(sort_by, "ud.downloaded_at")
     direction = "DESC" if order.upper() == "DESC" else "ASC"
 
-    # ĐÃ SỬA: Thêm GROUP BY và MAX(mc.thumbnail_url) để lấy ảnh bìa từ kho cache ra ngoài
     sql = f"""
-        SELECT 
+        SELECT
             ud.id AS download_id,
             ud.format_selected,
             ud.download_status,
@@ -118,7 +255,7 @@ def get_user_saved_media(user_id: int, sort_by: str = "date_saved", order: str =
         GROUP BY ud.id, ma.id
         ORDER BY {sort_column} {direction}
     """
-    
+
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
@@ -127,54 +264,3 @@ def get_user_saved_media(user_id: int, sort_by: str = "date_saved", order: str =
     except Exception as e:
         print(f"❌ Lỗi Sorting Engine: {e}")
         return []
-
-
-# ================================================================
-# 4. CHỨC NĂNG QUẢN TRỊ USER (ADMIN DASHBOARD SERVICES)
-# ================================================================
-
-def get_all_users_admin(page: int = 1, per_page: int = 20, sort_by: str = 'created_at', order: str = 'DESC') -> dict:
-    """Lấy danh sách phân trang và sắp xếp toàn bộ người dùng hệ thống cho Admin"""
-    allowed_sort = {
-        'id': 'id', 
-        'username': 'username', 
-        'created_at': 'created_at', 
-        'last_login_at': 'last_login_at'
-    }
-    sort_col = allowed_sort.get(sort_by, 'created_at')
-    direction = "ASC" if order.upper() == "ASC" else "DESC"
-    offset = (page - 1) * per_page
-    
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total = cursor.fetchone()[0]
-        
-        cursor.execute(f"""
-            SELECT id, username, email, role, is_active, last_login_at, created_at 
-            FROM users 
-            ORDER BY {sort_col} {direction} 
-            LIMIT ? OFFSET ?
-        """, (per_page, offset))
-        rows = [dict(r) for r in cursor.fetchall()]
-        
-    return {'total': total, 'page': page, 'per_page': per_page, 'users': rows}
-
-def modify_user_admin(user_id: int, is_active: int, role: str) -> dict:
-    """Chỉnh sửa trạng thái hoạt động (Khóa/Mở) và Phân vai trò của User"""
-    if role not in ('member', 'admin'): 
-        role = 'member'
-    with get_connection() as conn:
-        conn.execute(
-            "UPDATE users SET is_active = ?, role = ? WHERE id = ?", 
-            (is_active, role, user_id)
-        )
-        conn.commit()
-    return {'success': True, 'message': 'Đã cập nhật thông tin người dùng.'}
-
-def delete_user_admin(user_id: int) -> dict:
-    """Xóa sổ vĩnh viễn tài khoản người dùng khỏi cơ sở dữ liệu"""
-    with get_connection() as conn:
-        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-        conn.commit()
-    return {'success': True, 'message': 'Đã xóa bỏ người dùng thành công.'}

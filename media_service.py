@@ -10,8 +10,7 @@ def get_or_create_creator(channel_id: str, channel_name: str, platform: str = 'y
             (channel_id, platform)
         )
         row = cursor.fetchone()
-        if row:
-            return row['id']
+        if row: return row['id']
             
         try:
             cursor.execute(
@@ -21,7 +20,6 @@ def get_or_create_creator(channel_id: str, channel_name: str, platform: str = 'y
             conn.commit()
             return cursor.lastrowid
         except sqlite3.IntegrityError:
-            # Phòng trường hợp bất đồng bộ tiến trình (Race Condition)
             cursor.execute(
                 "SELECT id FROM creators WHERE channel_id = ? AND platform = ?",
                 (channel_id, platform)
@@ -47,14 +45,22 @@ def add_media_asset(title: str, platform: str, external_id: str, source_url: str
             )
             conn.commit()
             return {"success": True, "asset_id": cursor.lastrowid}
+            
     except sqlite3.IntegrityError as e:
-        # Nếu trùng URL hoặc trùng bộ khóa (platform, external_id)
+        # ĐÃ SỬA LỖI: Nếu video đã tồn tại (trùng platform + external_id), truy xuất lại ID của nó và trả về thành công
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM media_assets WHERE platform = ? AND external_id = ?", (platform, external_id))
+            row = cursor.fetchone()
+            if row:
+                return {"success": True, "asset_id": row['id']}
+                
         return {"success": False, "message": "Video asset này đã tồn tại trong hệ thống.", "error": str(e)}
+        
     except Exception as e:
         return {"success": False, "message": f"Lỗi hệ thống ghi nhận asset: {e}"}
 
 def get_media_by_url(url: str) -> dict | None:
-    """Tìm kiếm nhanh thông tin Asset dựa trên URL gốc dán từ Frontend."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM media_assets WHERE source_url = ?", (url.strip(),))
@@ -62,7 +68,6 @@ def get_media_by_url(url: str) -> dict | None:
         return dict(row) if row else None
 
 def get_media_by_id(asset_id: int) -> dict | None:
-    """Truy vấn thông tin chi tiết video qua mã asset_id."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
